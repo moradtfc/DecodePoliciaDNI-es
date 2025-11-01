@@ -338,10 +338,17 @@ class MiDNIQRScanner: NSObject {
     private func decodeC40(_ data: Data) -> String? {
         // Implementación simplificada de C40
         // Para producción, necesitarías la implementación completa según ICAO 9303
+
+        guard !data.isEmpty else {
+            print("⚠️ decodeC40: data vacío")
+            return nil
+        }
+
         var result = ""
         var bits = 0
         var bitCount = 0
 
+        // Iterar sobre los bytes (funciona correctamente con slices)
         for byte in data {
             bits = (bits << 8) | Int(byte)
             bitCount += 8
@@ -369,9 +376,22 @@ class MiDNIQRScanner: NSObject {
     }
 
     private func decodeICAODate(_ data: Data) -> Date? {
-        guard data.count == 3 else { return nil }
+        guard data.count >= 3 else {
+            print("⚠️ decodeICAODate: datos insuficientes (\(data.count) bytes, necesita 3)")
+            return nil
+        }
 
-        let days = (Int(data[0]) << 8) | Int(data[1])
+        // Usar startIndex para acceder correctamente a slices de Data
+        let idx0 = data.startIndex
+        let idx1 = data.index(after: idx0)
+        let idx2 = data.index(after: idx1)
+
+        guard idx2 < data.endIndex else {
+            print("⚠️ decodeICAODate: índices fuera de rango")
+            return nil
+        }
+
+        let days = (Int(data[idx0]) << 8) | Int(data[idx1])
         let year = days / 365 + 2000
         let dayOfYear = days % 365
 
