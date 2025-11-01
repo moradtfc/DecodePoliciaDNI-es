@@ -95,13 +95,22 @@ class MiDNIQRScanner: NSObject {
         print("\n" + String(repeating: "=", count: 80))
         print("📖 DECODIFICACIÓN SEGÚN ESPECIFICACIÓN ICAO 9303")
         print(String(repeating: "=", count: 80))
+        print("📊 Tamaño total de datos: \(data.count) bytes")
 
         // 1. Magic Constant
+        guard index < data.count else {
+            print("❌ No hay suficientes datos para leer Magic Constant")
+            return nil
+        }
         let magicConstant = data[index]
         print("\n[Byte \(index)] Magic Constant: 0x\(String(format: "%02x", magicConstant)) (esperado: 0xDC)")
         index += 1
 
         // 2. Version
+        guard index < data.count else {
+            print("❌ No hay suficientes datos para leer Version")
+            return nil
+        }
         let version = data[index]
         print("[Byte \(index)] Version: 0x\(String(format: "%02x", version)) (esperado: 0x03)")
         index += 1
@@ -112,6 +121,10 @@ class MiDNIQRScanner: NSObject {
         }
 
         // 3. País (C40 encoded, 2 bytes)
+        guard index + 2 <= data.count else {
+            print("❌ No hay suficientes datos para leer País (necesita \(index + 2) bytes, disponible: \(data.count))")
+            return nil
+        }
         let countryData = data[index..<index+2]
         let countryHex = countryData.map { String(format: "%02x", $0) }.joined(separator: " ")
         let country = decodeC40(countryData) ?? "??"
@@ -119,6 +132,10 @@ class MiDNIQRScanner: NSObject {
         index += 2
 
         // 4. Identificador del firmante (variable)
+        guard index + 4 <= data.count else {
+            print("❌ No hay suficientes datos para leer Signer ID (necesita \(index + 4) bytes, disponible: \(data.count))")
+            return nil
+        }
         let signerIdData = data[index..<index+4]
         let signerIdHex = signerIdData.map { String(format: "%02x", $0) }.joined(separator: " ")
         let signerIdPrefix = decodeC40(signerIdData) ?? "????"
@@ -132,6 +149,10 @@ class MiDNIQRScanner: NSObject {
 
         // Calcular bytes necesarios para C40
         let certRefC40Bytes = ((certRefLength + 2) / 3) * 2
+        guard index + certRefC40Bytes <= data.count else {
+            print("❌ No hay suficientes datos para leer Certificado (necesita \(index + certRefC40Bytes) bytes, disponible: \(data.count))")
+            return nil
+        }
         let certRefData = data[index..<index+certRefC40Bytes]
         let certRefHex = certRefData.map { String(format: "%02x", $0) }.joined(separator: " ")
         let certificateReference = decodeC40(certRefData) ?? ""
@@ -141,6 +162,10 @@ class MiDNIQRScanner: NSObject {
         index += certRefC40Bytes
 
         // 5. Fecha de emisión (3 bytes)
+        guard index + 3 <= data.count else {
+            print("❌ No hay suficientes datos para leer Fecha emisión (necesita \(index + 3) bytes, disponible: \(data.count))")
+            return nil
+        }
         let issueData = data[index..<index+3]
         let issueHex = issueData.map { String(format: "%02x", $0) }.joined(separator: " ")
         let documentIssueDate = decodeICAODate(issueData)
@@ -148,6 +173,10 @@ class MiDNIQRScanner: NSObject {
         index += 3
 
         // 6. Fecha de firma (3 bytes)
+        guard index + 3 <= data.count else {
+            print("❌ No hay suficientes datos para leer Fecha firma (necesita \(index + 3) bytes, disponible: \(data.count))")
+            return nil
+        }
         let signData = data[index..<index+3]
         let signHex = signData.map { String(format: "%02x", $0) }.joined(separator: " ")
         let signatureDate = decodeICAODate(signData)
@@ -155,12 +184,20 @@ class MiDNIQRScanner: NSObject {
         index += 3
 
         // 7. Tipo de QR (1 byte)
+        guard index < data.count else {
+            print("❌ No hay suficientes datos para leer Tipo QR")
+            return nil
+        }
         let qrTypeRaw = data[index]
         let qrType = MiDNIData.QRType(rawValue: qrTypeRaw) ?? .simple
         print("[Byte \(index)] Tipo QR: 0x\(String(format: "%02x", qrTypeRaw)) → \(qrType.description)")
         index += 1
 
         // 8. Categoría de documento (1 byte)
+        guard index < data.count else {
+            print("❌ No hay suficientes datos para leer Categoría documento")
+            return nil
+        }
         let documentCategory = data[index]
         print("[Byte \(index)] Categoría documento: 0x\(String(format: "%02x", documentCategory))")
         index += 1
