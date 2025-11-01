@@ -212,29 +212,28 @@ extension QRScannerViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
 
             print("🎯 VISION: QR detectado! Tipo: \(barcode.symbology.rawValue)")
 
-            // Obtener el payload del QR
+            // Obtener el payload del QR desde el descriptor
             var qrData: Data?
 
-            // Método 1: payloadStringValue con ISO Latin 1
-            if let payloadString = barcode.payloadStringValue {
-                print("📲 Payload string length: \(payloadString.count)")
+            // Usar el descriptor para obtener los datos raw
+            if let descriptor = barcode.barcodeDescriptor as? CIQRCodeDescriptor {
+                let payload = descriptor.errorCorrectedPayload
+                print("📦 Error corrected payload: \(payload.count) bytes")
+                print("📦 Primeros 30 bytes (hex): \(payload.prefix(30).map { String(format: "%02x", $0) }.joined(separator: " "))")
 
-                // Intentar ISO Latin 1 primero (para datos binarios)
-                if let data = payloadString.data(using: .isoLatin1) {
-                    qrData = data
-                    print("✅ Payload extraído con ISO Latin 1: \(data.count) bytes")
-                }
-                // Fallback a UTF-8
-                else if let data = payloadString.data(using: .utf8) {
-                    qrData = data
-                    print("✅ Payload extraído con UTF-8: \(data.count) bytes")
+                // Parsear el payload del QR para extraer solo los datos del usuario
+                if let extractedData = self.extractUserDataFromQRPayload(payload) {
+                    qrData = extractedData
+                    print("✅ Datos de usuario extraídos: \(extractedData.count) bytes")
+                    print("📦 Primeros 20 bytes de datos usuario (hex): \(extractedData.prefix(20).map { String(format: "%02x", $0) }.joined(separator: " "))")
+                } else {
+                    print("❌ No se pudieron extraer los datos del usuario del payload")
                 }
             }
 
             // Si tenemos datos, procesarlos
             if let data = qrData {
                 print("📦 Procesando \(data.count) bytes")
-                print("📦 Primeros 20 bytes (hex): \(data.prefix(20).map { String(format: "%02x", $0) }.joined(separator: " "))")
 
                 // Evitar procesar múltiples veces
                 DispatchQueue.main.async {
@@ -268,6 +267,98 @@ extension QRScannerViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
         } catch {
             print("❌ Error al ejecutar Vision request: \(error.localizedDescription)")
         }
+    }
+
+    /// Extrae los datos del usuario desde el payload del QR (elimina headers de estructura QR)
+    private func extractUserDataFromQRPayload(_ payload: Data) -> Data? {
+        guard payload.count > 2 else {
+            print("⚠️ Payload demasiado pequeño: \(payload.count) bytes")
+            return nil
+        }
+
+        var bitOffset = 0
+        var byteIndex = 0
+
+        // Función auxiliar para leer bits
+        func readBits(_ count: Int) -> Int? {
+            guard count > 0, count <= 32 else { return nil }
+
+            var result = 0
+            var bitsRead = 0
+
+            while bitsRead < count {
+                guard byteIndex < payload.count else { return nil }
+
+                let byte = Int(payload[byteIndex])
+                let bitsAvailable = 8 - bitOffset
+                let bitsToRead = min(count - bitsRead, bitsAvailable)
+
+                let mask = (1 << bitsToRead) - 1
+                let shift = bitsAvailable - bitsToRead
+                let bits = (byte >> shift) & mask
+
+                result = (result << bitsToRead) | bits
+
+                bitOffset += bitsToRead
+                if bitOffset >= 8 {
+                    bitOffset = 0
+                    byteIndex += 1
+                }
+
+                bitsRead += bitsToRead
+            }
+
+            return result
+        }
+
+        // Leer mode indicator (4 bits)
+        guard let mode = readBits(4) else {
+            print("❌ No se pudo leer el mode indicator")
+            return nil
+        }
+
+        print("🔍 QR Mode: \(mode) (4=Byte, 8=Kanji)")
+
+        // Si es modo Byte (0100 = 4)
+        if mode == 4 {
+            // Leer character count (8 bits para versiones 1-9, 16 bits para versiones 10+)
+            // Intentamos primero con 8 bits, luego con 16 si es necesario
+            guard let length = readBits(8) else {
+                print("❌ No se pudo leer el length")
+                return nil
+            }
+
+            print("🔍 Length indicator: \(length) bytes")
+
+            // Alinear a byte boundary si es necesario
+            if bitOffset != 0 {
+                byteIndex += 1
+                bitOffset = 0
+            }
+
+            // Extraer los datos
+            guard byteIndex + length <= payload.count else {
+                print("❌ Length excede el tamaño del payload: \(byteIndex) + \(length) > \(payload.count)")
+                return nil
+            }
+
+            let userData = payload[byteIndex..<(byteIndex + length)]
+            return Data(userData)
+        }
+        // Si es modo Byte con length de 16 bits (para versiones QR más grandes)
+        else if mode == 0 {
+            // Puede ser padding, intentar buscar el inicio de datos mirando por 0xDC
+            print("🔍 Mode 0 detectado, buscando magic constant 0xDC...")
+
+            // Buscar 0xDC (magic constant de miDNI) en el payload
+            if let dcIndex = payload.firstIndex(of: 0xDC) {
+                print("✅ Magic constant 0xDC encontrado en índice \(dcIndex)")
+                return Data(payload[dcIndex...])
+            }
+        }
+
+        print("❌ Modo QR no soportado o no reconocido: \(mode)")
+        return nil
     }
 
     private func showSuccess() {
