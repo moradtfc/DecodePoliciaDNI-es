@@ -270,60 +270,115 @@ extension QRScannerViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
     }
 
     /// Extrae los datos del usuario desde el payload del QR
-    /// Busca directamente el patrón 0xDC 0x03 (magic constant + versión)
+    /// Los datos están después de mode (4 bits) + character count (16 bits para QR grandes)
     private func extractUserDataFromQRPayload(_ payload: Data) -> Data? {
-        print("🔍 Buscando patrón 0xDC 0x03 en payload de \(payload.count) bytes...")
+        print("🔍 Analizando estructura del QR payload de \(payload.count) bytes...")
 
-        // Buscar el patrón específico: 0xDC (magic) seguido de 0x03 (versión)
-        for i in 0..<(payload.count - 1) {
-            if payload[i] == 0xDC && payload[i + 1] == 0x03 {
-                print("✅ Patrón 0xDC 0x03 encontrado en índice \(i)")
+        guard payload.count >= 3 else {
+            print("❌ Payload demasiado pequeño")
+            return nil
+        }
 
-                // Extraer desde 0xDC hasta el final del payload
-                let userData = Data(payload[i...])
-                print("✅ Extrayendo \(userData.count) bytes desde índice \(i)")
+        // Leer los primeros bits para determinar el modo y longitud
+        let byte0 = Int(payload[0])
+        let byte1 = Int(payload[1])
+        let byte2 = payload.count > 2 ? Int(payload[2]) : 0
 
-                // Imprimir TODOS los bytes en formato hexadecimal
+        // Mode indicator (primeros 4 bits del byte 0)
+        let mode = byte0 >> 4
+        print("📊 Mode indicator: \(mode) (4=Byte mode)")
+
+        guard mode == 4 else {
+            print("❌ Modo no soportado: \(mode)")
+            return nil
+        }
+
+        // Para QR grandes (> 150 bytes), character count es de 16 bits
+        // Bits 4-19: últimos 4 bits del byte 0 + byte 1 completo + primeros 4 bits del byte 2
+        let lengthPart1 = byte0 & 0x0F  // últimos 4 bits del byte 0
+        let lengthPart2 = byte1          // byte 1 completo
+        let lengthPart3 = byte2 >> 4     // primeros 4 bits del byte 2
+
+        let characterCount = (lengthPart1 << 12) | (lengthPart2 << 4) | lengthPart3
+        print("📊 Character count (16 bits): \(characterCount) bytes")
+
+        // Los datos del usuario empiezan en el bit 20 (después de 4 bits de mode + 16 bits de length)
+        // Bit 20 está en el byte 2, bit 4
+        // Necesitamos extraer desde bit 20 en adelante y realinear a bytes
+
+        // Calcular cuántos bytes completos de datos tenemos
+        // Tenemos que extraer desde el bit 20
+        // El bit 20 está en byte 2, posición 4 (contando desde 0)
+
+        var outputData = Data()
+        var currentBit = 20  // Empezar desde el bit 20
+
+        // Extraer characterCount bytes de datos
+        for _ in 0..<characterCount {
+            let byteIndex = currentBit / 8
+            let bitOffset = currentBit % 8
+
+            guard byteIndex < payload.count else {
+                print("❌ Se acabaron los datos del payload")
+                break
+            }
+
+            if bitOffset == 0 {
+                // Alineado a byte boundary, podemos copiar directamente
+                outputData.append(payload[byteIndex])
+            } else {
+                // No alineado, necesitamos combinar bits de dos bytes consecutivos
+                guard byteIndex + 1 < payload.count else {
+                    print("❌ No hay suficientes bytes para reconstruir el último byte")
+                    break
+                }
+
+                let byte1 = Int(payload[byteIndex])
+                let byte2 = Int(payload[byteIndex + 1])
+
+                // Tomar los últimos (8 - bitOffset) bits del byte1 y los primeros bitOffset bits del byte2
+                let bitsFromByte1 = (byte1 << bitOffset) & 0xFF
+                let bitsFromByte2 = (byte2 >> (8 - bitOffset)) & 0xFF
+                let reconstructedByte = bitsFromByte1 | bitsFromByte2
+
+                outputData.append(UInt8(reconstructedByte))
+            }
+
+            currentBit += 8
+        }
+
+        print("✅ Extraídos \(outputData.count) bytes de datos de usuario")
+        print("📦 Primeros 10 bytes: \(outputData.prefix(10).map { String(format: "%02x", $0) }.joined(separator: " "))")
+
+        // Verificar que empieza con 0xDC 0x03
+        if outputData.count >= 2 {
+            let magic = outputData[0]
+            let version = outputData[1]
+            print("🔍 Magic: 0x\(String(format: "%02x", magic)), Version: 0x\(String(format: "%02x", version))")
+
+            if magic == 0xDC && version == 0x03 {
+                print("✅ Estructura miDNI válida detectada!")
+
+                // Imprimir hex dump completo
                 print("\n" + String(repeating: "=", count: 80))
                 print("📋 DUMP COMPLETO DE BYTES (para comparar con PDF)")
                 print(String(repeating: "=", count: 80))
 
                 let bytesPerLine = 16
-
-                for lineStart in stride(from: 0, to: userData.count, by: bytesPerLine) {
-                    let lineEnd = min(lineStart + bytesPerLine, userData.count)
-                    let lineData = userData[lineStart..<lineEnd]
+                for lineStart in stride(from: 0, to: outputData.count, by: bytesPerLine) {
+                    let lineEnd = min(lineStart + bytesPerLine, outputData.count)
+                    let lineData = outputData[lineStart..<lineEnd]
                     let hexLine = lineData.map { String(format: "%02x", $0) }.joined(separator: " ")
                     let offset = String(format: "%04x", lineStart)
                     print("\(offset) - \(hexLine)")
                 }
-
                 print(String(repeating: "=", count: 80) + "\n")
 
-                return userData
+                return outputData
+            } else {
+                print("❌ Magic/Version incorrectos")
             }
         }
-
-        // Si no encontramos el patrón correcto, mostrar información de debug
-        print("❌ Patrón 0xDC 0x03 no encontrado en el payload")
-
-        // Buscar todas las ocurrencias de 0xDC para debug
-        var dcIndices: [Int] = []
-        for i in 0..<payload.count {
-            if payload[i] == 0xDC {
-                let nextByte = i + 1 < payload.count ? payload[i + 1] : 0x00
-                dcIndices.append(i)
-                print("   Encontrado 0xDC en índice \(i), siguiente byte: 0x\(String(format: "%02x", nextByte))")
-            }
-        }
-
-        if dcIndices.isEmpty {
-            print("   No se encontró ningún byte 0xDC en el payload")
-        }
-
-        print("📦 Payload completo (primeros 100 bytes):")
-        let hexDump = payload.prefix(100).map { String(format: "%02x", $0) }.joined(separator: " ")
-        print("   \(hexDump)")
 
         return nil
     }
