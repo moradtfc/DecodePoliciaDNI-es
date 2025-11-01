@@ -321,14 +321,17 @@ extension QRScannerViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
 
         // Si es modo Byte (0100 = 4)
         if mode == 4 {
-            // Leer character count (8 bits para versiones 1-9, 16 bits para versiones 10+)
-            // Intentamos primero con 8 bits, luego con 16 si es necesario
-            guard let length = readBits(8) else {
-                print("❌ No se pudo leer el length")
+            // Determinar cuántos bits usar para el character count según el tamaño del payload
+            // Versión 1-9: 8 bits, Versión 10-26: 16 bits, Versión 27-40: 16 bits
+            // Con 1174 bytes de payload, es versión 10+, así que usamos 16 bits
+            let lengthBits = payload.count > 150 ? 16 : 8
+
+            guard let length = readBits(lengthBits) else {
+                print("❌ No se pudo leer el length (\(lengthBits) bits)")
                 return nil
             }
 
-            print("🔍 Length indicator: \(length) bytes")
+            print("🔍 Length indicator (\(lengthBits) bits): \(length) bytes")
 
             // Alinear a byte boundary si es necesario
             if bitOffset != 0 {
@@ -339,25 +342,36 @@ extension QRScannerViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
             // Extraer los datos
             guard byteIndex + length <= payload.count else {
                 print("❌ Length excede el tamaño del payload: \(byteIndex) + \(length) > \(payload.count)")
+
+                // Fallback: buscar 0xDC en el payload
+                print("🔍 Intentando fallback: buscando magic constant 0xDC...")
+                if let dcIndex = payload.firstIndex(of: 0xDC) {
+                    print("✅ Magic constant 0xDC encontrado en índice \(dcIndex)")
+                    let remainingData = Data(payload[dcIndex...])
+                    print("✅ Extrayendo \(remainingData.count) bytes desde 0xDC")
+                    return remainingData
+                }
+
                 return nil
             }
 
             let userData = payload[byteIndex..<(byteIndex + length)]
             return Data(userData)
         }
-        // Si es modo Byte con length de 16 bits (para versiones QR más grandes)
-        else if mode == 0 {
-            // Puede ser padding, intentar buscar el inicio de datos mirando por 0xDC
-            print("🔍 Mode 0 detectado, buscando magic constant 0xDC...")
+        // Si es otro modo, intentar buscar el magic constant
+        else {
+            print("🔍 Modo \(mode) detectado, buscando magic constant 0xDC...")
 
             // Buscar 0xDC (magic constant de miDNI) en el payload
             if let dcIndex = payload.firstIndex(of: 0xDC) {
                 print("✅ Magic constant 0xDC encontrado en índice \(dcIndex)")
-                return Data(payload[dcIndex...])
+                let remainingData = Data(payload[dcIndex...])
+                print("✅ Extrayendo \(remainingData.count) bytes desde 0xDC")
+                return remainingData
             }
         }
 
-        print("❌ Modo QR no soportado o no reconocido: \(mode)")
+        print("❌ No se pudieron extraer los datos del usuario")
         return nil
     }
 
