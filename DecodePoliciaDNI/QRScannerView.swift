@@ -9,6 +9,7 @@ import SwiftUI
 import AVFoundation
 import AudioToolbox
 import Combine
+import CoreImage
 
 struct QRScannerView: View {
     @Environment(\.dismiss) var dismiss
@@ -196,29 +197,72 @@ extension QRScannerViewModel: AVCaptureMetadataOutputObjectsDelegate {
 
         print("🎯 DELEGATE LLAMADO! Objetos detectados: \(metadataObjects.count)")
 
-        guard let metadataObject = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
-              let stringValue = metadataObject.stringValue else {
-            print("⚠️ No se pudo extraer el valor del QR")
+        guard let metadataObject = metadataObjects.first as? AVMetadataMachineReadableCodeObject else {
+            print("⚠️ No se pudo convertir a AVMetadataMachineReadableCodeObject")
             return
         }
 
-        print("📲 QR detectado! Longitud del string: \(stringValue.count)")
-        print("📲 Primeros 50 caracteres: \(String(stringValue.prefix(50)))")
+        print("📲 Tipo de QR: \(metadataObject.type.rawValue)")
 
-        // Vibración de feedback
-        AudioServicesPlaySystemSound(SystemSoundID(kSystemSoundID_Vibrate))
+        // Intentar obtener los datos binarios desde el descriptor
+        var qrData: Data?
 
-        if let miDNI = scanner.decodeQRData(stringValue) {
-            scanner.printSummary(miDNI)
-
-            DispatchQueue.main.async {
-                self.isScanning = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    self.isScanning = false
+        // Método 1: Usar CIQRCodeDescriptor para obtener bytes raw (iOS 11+)
+        if #available(iOS 11.0, *) {
+            if let descriptor = metadataObject.descriptor as? CIQRCodeDescriptor {
+                qrData = descriptor.errorCorrectedPayload
+                print("✅ Datos obtenidos desde CIQRCodeDescriptor: \(qrData?.count ?? 0) bytes")
+                if let data = qrData {
+                    print("📦 Primeros 20 bytes (hex): \(data.prefix(20).map { String(format: "%02x", $0) }.joined(separator: " "))")
                 }
             }
+        }
+
+        // Método 2: Intentar stringValue con ISO Latin 1 (fallback)
+        if qrData == nil, let stringValue = metadataObject.stringValue {
+            print("⚠️ Intentando con stringValue, longitud: \(stringValue.count)")
+
+            // Intentar ISO Latin 1
+            if let stringData = stringValue.data(using: .isoLatin1) {
+                qrData = stringData
+                print("✅ Datos obtenidos desde stringValue (ISO Latin 1): \(stringData.count) bytes")
+            }
+            // Intentar Base64
+            else if let base64Data = Data(base64Encoded: stringValue) {
+                qrData = base64Data
+                print("✅ Datos obtenidos desde stringValue (Base64): \(base64Data.count) bytes")
+            }
+            // Intentar UTF-8 como último recurso
+            else if let utf8Data = stringValue.data(using: .utf8) {
+                qrData = utf8Data
+                print("✅ Datos obtenidos desde stringValue (UTF-8): \(utf8Data.count) bytes")
+            }
+        }
+
+        // Si tenemos datos binarios, procesarlos
+        if let data = qrData {
+            print("📦 Procesando \(data.count) bytes de datos binarios")
+
+            // Vibración de feedback
+            AudioServicesPlaySystemSound(SystemSoundID(kSystemSoundID_Vibrate))
+
+            if let miDNI = scanner.decodeQRDataFromBytes(data) {
+                scanner.printSummary(miDNI)
+                showSuccess()
+            } else {
+                print("❌ No se pudo decodificar el QR como miDNI")
+            }
         } else {
-            print("❌ No se pudo decodificar el QR como miDNI")
+            print("❌ No se pudieron extraer los datos del QR")
+        }
+    }
+
+    private func showSuccess() {
+        DispatchQueue.main.async {
+            self.isScanning = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                self.isScanning = false
+            }
         }
     }
 }

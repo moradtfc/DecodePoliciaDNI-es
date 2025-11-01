@@ -54,6 +54,19 @@ class MiDNIQRScanner: NSObject {
 
     // MARK: - QR Decoding
 
+    /// Decodifica datos binarios directamente (método preferido)
+    func decodeQRDataFromBytes(_ data: Data) -> MiDNIData? {
+        print("🔍 Intentando decodificar \(data.count) bytes de datos binarios")
+
+        guard data.count > 38 else {
+            print("❌ Datos insuficientes: \(data.count) bytes (mínimo 38)")
+            return nil
+        }
+
+        return parseMiDNIStructure(data)
+    }
+
+    /// Decodifica desde string (para retrocompatibilidad)
     func decodeQRData(_ stringValue: String) -> MiDNIData? {
         var rawData: Data?
 
