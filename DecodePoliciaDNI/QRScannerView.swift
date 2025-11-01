@@ -269,110 +269,34 @@ extension QRScannerViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
     }
 
-    /// Extrae los datos del usuario desde el payload del QR (elimina headers de estructura QR)
+    /// Extrae los datos del usuario desde el payload del QR
+    /// Busca directamente el magic constant 0xDC del miDNI
     private func extractUserDataFromQRPayload(_ payload: Data) -> Data? {
-        guard payload.count > 2 else {
-            print("⚠️ Payload demasiado pequeño: \(payload.count) bytes")
-            return nil
-        }
+        print("🔍 Buscando magic constant 0xDC en payload de \(payload.count) bytes...")
 
-        var bitOffset = 0
-        var byteIndex = 0
-
-        // Función auxiliar para leer bits
-        func readBits(_ count: Int) -> Int? {
-            guard count > 0, count <= 32 else { return nil }
-
-            var result = 0
-            var bitsRead = 0
-
-            while bitsRead < count {
-                guard byteIndex < payload.count else { return nil }
-
-                let byte = Int(payload[byteIndex])
-                let bitsAvailable = 8 - bitOffset
-                let bitsToRead = min(count - bitsRead, bitsAvailable)
-
-                let mask = (1 << bitsToRead) - 1
-                let shift = bitsAvailable - bitsToRead
-                let bits = (byte >> shift) & mask
-
-                result = (result << bitsToRead) | bits
-
-                bitOffset += bitsToRead
-                if bitOffset >= 8 {
-                    bitOffset = 0
-                    byteIndex += 1
-                }
-
-                bitsRead += bitsToRead
-            }
-
-            return result
-        }
-
-        // Leer mode indicator (4 bits)
-        guard let mode = readBits(4) else {
-            print("❌ No se pudo leer el mode indicator")
-            return nil
-        }
-
-        print("🔍 QR Mode: \(mode) (4=Byte, 8=Kanji)")
-
-        // Si es modo Byte (0100 = 4)
-        if mode == 4 {
-            // Determinar cuántos bits usar para el character count según el tamaño del payload
-            // Versión 1-9: 8 bits, Versión 10-26: 16 bits, Versión 27-40: 16 bits
-            // Con 1174 bytes de payload, es versión 10+, así que usamos 16 bits
-            let lengthBits = payload.count > 150 ? 16 : 8
-
-            guard let length = readBits(lengthBits) else {
-                print("❌ No se pudo leer el length (\(lengthBits) bits)")
+        // Buscar el magic constant 0xDC (inicio de datos miDNI)
+        if let dcIndex = payload.firstIndex(of: 0xDC) {
+            // Verificar que el siguiente byte sea 0x03 (versión)
+            guard dcIndex + 1 < payload.count else {
+                print("❌ Magic constant encontrado pero no hay byte de versión")
                 return nil
             }
 
-            print("🔍 Length indicator (\(lengthBits) bits): \(length) bytes")
+            let version = payload[dcIndex + 1]
+            print("✅ Magic constant 0xDC encontrado en índice \(dcIndex)")
+            print("✅ Byte de versión: 0x\(String(format: "%02x", version))")
 
-            // Alinear a byte boundary si es necesario
-            if bitOffset != 0 {
-                byteIndex += 1
-                bitOffset = 0
-            }
+            // Extraer desde 0xDC hasta el final del payload
+            let userData = Data(payload[dcIndex...])
+            print("✅ Extrayendo \(userData.count) bytes desde 0xDC")
+            print("📦 Primeros 10 bytes: \(userData.prefix(10).map { String(format: "%02x", $0) }.joined(separator: " "))")
 
-            // Extraer los datos
-            guard byteIndex + length <= payload.count else {
-                print("❌ Length excede el tamaño del payload: \(byteIndex) + \(length) > \(payload.count)")
-
-                // Fallback: buscar 0xDC en el payload
-                print("🔍 Intentando fallback: buscando magic constant 0xDC...")
-                if let dcIndex = payload.firstIndex(of: 0xDC) {
-                    print("✅ Magic constant 0xDC encontrado en índice \(dcIndex)")
-                    let remainingData = Data(payload[dcIndex...])
-                    print("✅ Extrayendo \(remainingData.count) bytes desde 0xDC")
-                    return remainingData
-                }
-
-                return nil
-            }
-
-            let userData = payload[byteIndex..<(byteIndex + length)]
-            return Data(userData)
+            return userData
+        } else {
+            print("❌ Magic constant 0xDC no encontrado en el payload")
+            print("📦 Payload completo (primeros 50 bytes): \(payload.prefix(50).map { String(format: "%02x", $0) }.joined(separator: " "))")
+            return nil
         }
-        // Si es otro modo, intentar buscar el magic constant
-        else {
-            print("🔍 Modo \(mode) detectado, buscando magic constant 0xDC...")
-
-            // Buscar 0xDC (magic constant de miDNI) en el payload
-            if let dcIndex = payload.firstIndex(of: 0xDC) {
-                print("✅ Magic constant 0xDC encontrado en índice \(dcIndex)")
-                let remainingData = Data(payload[dcIndex...])
-                print("✅ Extrayendo \(remainingData.count) bytes desde 0xDC")
-                return remainingData
-            }
-        }
-
-        print("❌ No se pudieron extraer los datos del usuario")
-        return nil
     }
 
     private func showSuccess() {
