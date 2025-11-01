@@ -270,50 +270,62 @@ extension QRScannerViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
     }
 
     /// Extrae los datos del usuario desde el payload del QR
-    /// Busca directamente el magic constant 0xDC del miDNI
+    /// Busca directamente el patrón 0xDC 0x03 (magic constant + versión)
     private func extractUserDataFromQRPayload(_ payload: Data) -> Data? {
-        print("🔍 Buscando magic constant 0xDC en payload de \(payload.count) bytes...")
+        print("🔍 Buscando patrón 0xDC 0x03 en payload de \(payload.count) bytes...")
 
-        // Buscar el magic constant 0xDC (inicio de datos miDNI)
-        if let dcIndex = payload.firstIndex(of: 0xDC) {
-            // Verificar que el siguiente byte sea 0x03 (versión)
-            guard dcIndex + 1 < payload.count else {
-                print("❌ Magic constant encontrado pero no hay byte de versión")
-                return nil
+        // Buscar el patrón específico: 0xDC (magic) seguido de 0x03 (versión)
+        for i in 0..<(payload.count - 1) {
+            if payload[i] == 0xDC && payload[i + 1] == 0x03 {
+                print("✅ Patrón 0xDC 0x03 encontrado en índice \(i)")
+
+                // Extraer desde 0xDC hasta el final del payload
+                let userData = Data(payload[i...])
+                print("✅ Extrayendo \(userData.count) bytes desde índice \(i)")
+
+                // Imprimir TODOS los bytes en formato hexadecimal
+                print("\n" + String(repeating: "=", count: 80))
+                print("📋 DUMP COMPLETO DE BYTES (para comparar con PDF)")
+                print(String(repeating: "=", count: 80))
+
+                let bytesPerLine = 16
+
+                for lineStart in stride(from: 0, to: userData.count, by: bytesPerLine) {
+                    let lineEnd = min(lineStart + bytesPerLine, userData.count)
+                    let lineData = userData[lineStart..<lineEnd]
+                    let hexLine = lineData.map { String(format: "%02x", $0) }.joined(separator: " ")
+                    let offset = String(format: "%04x", lineStart)
+                    print("\(offset) - \(hexLine)")
+                }
+
+                print(String(repeating: "=", count: 80) + "\n")
+
+                return userData
             }
-
-            let version = payload[dcIndex + 1]
-            print("✅ Magic constant 0xDC encontrado en índice \(dcIndex)")
-            print("✅ Byte de versión: 0x\(String(format: "%02x", version))")
-
-            // Extraer desde 0xDC hasta el final del payload
-            let userData = Data(payload[dcIndex...])
-            print("✅ Extrayendo \(userData.count) bytes desde 0xDC")
-
-            // Imprimir TODOS los bytes en formato hexadecimal
-            print("\n" + String(repeating: "=", count: 80))
-            print("📋 DUMP COMPLETO DE BYTES (para comparar con PDF)")
-            print(String(repeating: "=", count: 80))
-
-            let hexString = userData.map { String(format: "%02x", $0) }.joined(separator: " ")
-            let bytesPerLine = 16
-
-            for lineStart in stride(from: 0, to: userData.count, by: bytesPerLine) {
-                let lineEnd = min(lineStart + bytesPerLine, userData.count)
-                let lineData = userData[lineStart..<lineEnd]
-                let hexLine = lineData.map { String(format: "%02x", $0) }.joined(separator: " ")
-                let offset = String(format: "%04d", lineStart)
-                print("[\(offset)] \(hexLine)")
-            }
-
-            print(String(repeating: "=", count: 80) + "\n")
-
-            return userData
-        } else {
-            print("❌ Magic constant 0xDC no encontrado en el payload")
-            print("📦 Payload completo (primeros 50 bytes): \(payload.prefix(50).map { String(format: "%02x", $0) }.joined(separator: " "))")
-            return nil
         }
+
+        // Si no encontramos el patrón correcto, mostrar información de debug
+        print("❌ Patrón 0xDC 0x03 no encontrado en el payload")
+
+        // Buscar todas las ocurrencias de 0xDC para debug
+        var dcIndices: [Int] = []
+        for i in 0..<payload.count {
+            if payload[i] == 0xDC {
+                let nextByte = i + 1 < payload.count ? payload[i + 1] : 0x00
+                dcIndices.append(i)
+                print("   Encontrado 0xDC en índice \(i), siguiente byte: 0x\(String(format: "%02x", nextByte))")
+            }
+        }
+
+        if dcIndices.isEmpty {
+            print("   No se encontró ningún byte 0xDC en el payload")
+        }
+
+        print("📦 Payload completo (primeros 100 bytes):")
+        let hexDump = payload.prefix(100).map { String(format: "%02x", $0) }.joined(separator: " ")
+        print("   \(hexDump)")
+
+        return nil
     }
 
     private func showSuccess() {
