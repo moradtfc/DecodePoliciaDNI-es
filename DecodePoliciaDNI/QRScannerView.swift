@@ -10,6 +10,7 @@ import AVFoundation
 import AudioToolbox
 import Combine
 import CoreImage
+import Vision
 
 struct QRScannerView: View {
     @Environment(\.dismiss) var dismiss
@@ -81,7 +82,6 @@ class QRScannerViewModel: NSObject, ObservableObject {
 
     let session = AVCaptureSession()
     private let scanner = MiDNIQRScanner()
-    private var metadataOutput: AVCaptureMetadataOutput?
     private var setupComplete = false
 
     func checkCameraPermission() {
@@ -138,20 +138,15 @@ class QRScannerViewModel: NSObject, ObservableObject {
                 return
             }
 
-            let output = AVCaptureMetadataOutput()
-            self.metadataOutput = output
+            // Usar AVCaptureVideoDataOutput para Vision framework
+            let videoOutput = AVCaptureVideoDataOutput()
+            videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "VideoDataOutputQueue"))
 
-            if session.canAddOutput(output) {
-                session.addOutput(output)
-
-                output.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
-                output.metadataObjectTypes = [.qr]
-
-                print("✅ Salida de metadatos configurada")
-                print("✅ Delegate configurado: \(self)")
-                print("✅ Tipos de metadata: \(output.metadataObjectTypes)")
+            if session.canAddOutput(videoOutput) {
+                session.addOutput(videoOutput)
+                print("✅ Salida de video configurada para Vision")
             } else {
-                print("❌ No se pudo agregar la salida de metadatos")
+                print("❌ No se pudo agregar la salida de video")
                 return
             }
 
@@ -189,78 +184,96 @@ class QRScannerViewModel: NSObject, ObservableObject {
     }
 }
 
-// MARK: - AVCaptureMetadataOutputObjectsDelegate
-extension QRScannerViewModel: AVCaptureMetadataOutputObjectsDelegate {
-    func metadataOutput(_ output: AVCaptureMetadataOutput,
-                       didOutput metadataObjects: [AVMetadataObject],
-                       from connection: AVCaptureConnection) {
+// MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
+extension QRScannerViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
+    func captureOutput(_ output: AVCaptureOutput,
+                      didOutput sampleBuffer: CMSampleBuffer,
+                      from connection: AVCaptureConnection) {
 
-        print("🎯 DELEGATE LLAMADO! Objetos detectados: \(metadataObjects.count)")
+        // Evitar procesar si ya estamos escaneando
+        guard !isScanning else { return }
 
-        guard let metadataObject = metadataObjects.first as? AVMetadataMachineReadableCodeObject else {
-            print("⚠️ No se pudo convertir a AVMetadataMachineReadableCodeObject")
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             return
         }
 
-        print("📲 Tipo de QR: \(metadataObject.type.rawValue)")
+        let request = VNDetectBarcodesRequest { [weak self] request, error in
+            guard let self = self else { return }
 
-        // Intentar obtener los datos binarios desde el descriptor
-        var qrData: Data?
+            if let error = error {
+                print("❌ Error en Vision request: \(error.localizedDescription)")
+                return
+            }
 
-        // Método 1: Usar CIQRCodeDescriptor para obtener bytes raw (iOS 11+)
-        if #available(iOS 11.0, *) {
-            if let descriptor = metadataObject.descriptor as? CIQRCodeDescriptor {
-                qrData = descriptor.errorCorrectedPayload
-                print("✅ Datos obtenidos desde CIQRCodeDescriptor: \(qrData?.count ?? 0) bytes")
-                if let data = qrData {
-                    print("📦 Primeros 20 bytes (hex): \(data.prefix(20).map { String(format: "%02x", $0) }.joined(separator: " "))")
+            guard let results = request.results as? [VNBarcodeObservation],
+                  let barcode = results.first else {
+                return
+            }
+
+            print("🎯 VISION: QR detectado! Tipo: \(barcode.symbology.rawValue)")
+
+            // Obtener el payload del QR
+            var qrData: Data?
+
+            // Método 1: payloadStringValue con ISO Latin 1
+            if let payloadString = barcode.payloadStringValue {
+                print("📲 Payload string length: \(payloadString.count)")
+
+                // Intentar ISO Latin 1 primero (para datos binarios)
+                if let data = payloadString.data(using: .isoLatin1) {
+                    qrData = data
+                    print("✅ Payload extraído con ISO Latin 1: \(data.count) bytes")
+                }
+                // Fallback a UTF-8
+                else if let data = payloadString.data(using: .utf8) {
+                    qrData = data
+                    print("✅ Payload extraído con UTF-8: \(data.count) bytes")
                 }
             }
-        }
 
-        // Método 2: Intentar stringValue con ISO Latin 1 (fallback)
-        if qrData == nil, let stringValue = metadataObject.stringValue {
-            print("⚠️ Intentando con stringValue, longitud: \(stringValue.count)")
+            // Si tenemos datos, procesarlos
+            if let data = qrData {
+                print("📦 Procesando \(data.count) bytes")
+                print("📦 Primeros 20 bytes (hex): \(data.prefix(20).map { String(format: "%02x", $0) }.joined(separator: " "))")
 
-            // Intentar ISO Latin 1
-            if let stringData = stringValue.data(using: .isoLatin1) {
-                qrData = stringData
-                print("✅ Datos obtenidos desde stringValue (ISO Latin 1): \(stringData.count) bytes")
-            }
-            // Intentar Base64
-            else if let base64Data = Data(base64Encoded: stringValue) {
-                qrData = base64Data
-                print("✅ Datos obtenidos desde stringValue (Base64): \(base64Data.count) bytes")
-            }
-            // Intentar UTF-8 como último recurso
-            else if let utf8Data = stringValue.data(using: .utf8) {
-                qrData = utf8Data
-                print("✅ Datos obtenidos desde stringValue (UTF-8): \(utf8Data.count) bytes")
-            }
-        }
+                // Evitar procesar múltiples veces
+                DispatchQueue.main.async {
+                    self.isScanning = true
+                }
 
-        // Si tenemos datos binarios, procesarlos
-        if let data = qrData {
-            print("📦 Procesando \(data.count) bytes de datos binarios")
+                // Vibración
+                AudioServicesPlaySystemSound(SystemSoundID(kSystemSoundID_Vibrate))
 
-            // Vibración de feedback
-            AudioServicesPlaySystemSound(SystemSoundID(kSystemSoundID_Vibrate))
-
-            if let miDNI = scanner.decodeQRDataFromBytes(data) {
-                scanner.printSummary(miDNI)
-                showSuccess()
+                if let miDNI = self.scanner.decodeQRDataFromBytes(data) {
+                    self.scanner.printSummary(miDNI)
+                    self.showSuccess()
+                } else {
+                    print("❌ No se pudo decodificar el QR como miDNI")
+                    DispatchQueue.main.async {
+                        self.isScanning = false
+                    }
+                }
             } else {
-                print("❌ No se pudo decodificar el QR como miDNI")
+                print("❌ No se pudo extraer el payload del QR")
             }
-        } else {
-            print("❌ No se pudieron extraer los datos del QR")
+        }
+
+        // Configurar el request para QR codes
+        request.symbologies = [.qr]
+
+        let requestHandler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
+
+        do {
+            try requestHandler.perform([request])
+        } catch {
+            print("❌ Error al ejecutar Vision request: \(error.localizedDescription)")
         }
     }
 
     private func showSuccess() {
         DispatchQueue.main.async {
             self.isScanning = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 self.isScanning = false
             }
         }
