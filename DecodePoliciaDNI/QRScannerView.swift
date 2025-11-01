@@ -8,6 +8,7 @@
 import SwiftUI
 import AVFoundation
 import AudioToolbox
+import Combine
 
 struct QRScannerView: View {
     @Environment(\.dismiss) var dismiss
