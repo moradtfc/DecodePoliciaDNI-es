@@ -289,7 +289,24 @@ extension QRScannerViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
             // Extraer desde 0xDC hasta el final del payload
             let userData = Data(payload[dcIndex...])
             print("✅ Extrayendo \(userData.count) bytes desde 0xDC")
-            print("📦 Primeros 10 bytes: \(userData.prefix(10).map { String(format: "%02x", $0) }.joined(separator: " "))")
+
+            // Imprimir TODOS los bytes en formato hexadecimal
+            print("\n" + String(repeating: "=", count: 80))
+            print("📋 DUMP COMPLETO DE BYTES (para comparar con PDF)")
+            print(String(repeating: "=", count: 80))
+
+            let hexString = userData.map { String(format: "%02x", $0) }.joined(separator: " ")
+            let bytesPerLine = 16
+
+            for lineStart in stride(from: 0, to: userData.count, by: bytesPerLine) {
+                let lineEnd = min(lineStart + bytesPerLine, userData.count)
+                let lineData = userData[lineStart..<lineEnd]
+                let hexLine = lineData.map { String(format: "%02x", $0) }.joined(separator: " ")
+                let offset = String(format: "%04d", lineStart)
+                print("[\(offset)] \(hexLine)")
+            }
+
+            print(String(repeating: "=", count: 80) + "\n")
 
             return userData
         } else {

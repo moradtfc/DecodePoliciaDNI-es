@@ -92,12 +92,18 @@ class MiDNIQRScanner: NSObject {
     private func parseMiDNIStructure(_ data: Data) -> MiDNIData? {
         var index = 0
 
+        print("\n" + String(repeating: "=", count: 80))
+        print("📖 DECODIFICACIÓN SEGÚN ESPECIFICACIÓN ICAO 9303")
+        print(String(repeating: "=", count: 80))
+
         // 1. Magic Constant
         let magicConstant = data[index]
+        print("\n[Byte \(index)] Magic Constant: 0x\(String(format: "%02x", magicConstant)) (esperado: 0xDC)")
         index += 1
 
         // 2. Version
         let version = data[index]
+        print("[Byte \(index)] Version: 0x\(String(format: "%02x", version)) (esperado: 0x03)")
         index += 1
 
         guard magicConstant == 0xDC, version == 0x03 else {
@@ -107,41 +113,61 @@ class MiDNIQRScanner: NSObject {
 
         // 3. País (C40 encoded, 2 bytes)
         let countryData = data[index..<index+2]
+        let countryHex = countryData.map { String(format: "%02x", $0) }.joined(separator: " ")
         let country = decodeC40(countryData) ?? "??"
+        print("[Bytes \(index)-\(index+1)] País (C40): \(countryHex) → \"\(country)\"")
         index += 2
 
         // 4. Identificador del firmante (variable)
-        // Primero 4 chars en C40 (4 bytes) para obtener "ESPN"
         let signerIdData = data[index..<index+4]
+        let signerIdHex = signerIdData.map { String(format: "%02x", $0) }.joined(separator: " ")
         let signerIdPrefix = decodeC40(signerIdData) ?? "????"
+        print("[Bytes \(index)-\(index+3)] Signer ID Prefix (C40): \(signerIdHex) → \"\(signerIdPrefix)\"")
         index += 4
 
         // Los últimos 2 dígitos indican la longitud de la referencia del certificado
         let certRefLengthStr = String(signerIdPrefix.suffix(2))
         let certRefLength = Int(certRefLengthStr, radix: 16) ?? 32
+        print("   ↳ Longitud referencia certificado: \(certRefLength) bytes (0x\(certRefLengthStr))")
 
         // Calcular bytes necesarios para C40
         let certRefC40Bytes = ((certRefLength + 2) / 3) * 2
         let certRefData = data[index..<index+certRefC40Bytes]
+        let certRefHex = certRefData.map { String(format: "%02x", $0) }.joined(separator: " ")
         let certificateReference = decodeC40(certRefData) ?? ""
+        print("[Bytes \(index)-\(index+certRefC40Bytes-1)] Certificado (C40, \(certRefC40Bytes) bytes):")
+        print("   Hex: \(certRefHex)")
+        print("   Decodificado: \"\(certificateReference)\"")
         index += certRefC40Bytes
 
         // 5. Fecha de emisión (3 bytes)
-        let documentIssueDate = decodeICAODate(data[index..<index+3])
+        let issueData = data[index..<index+3]
+        let issueHex = issueData.map { String(format: "%02x", $0) }.joined(separator: " ")
+        let documentIssueDate = decodeICAODate(issueData)
+        print("[Bytes \(index)-\(index+2)] Fecha emisión (ICAO): \(issueHex) → \(documentIssueDate?.description ?? "N/A")")
         index += 3
 
         // 6. Fecha de firma (3 bytes)
-        let signatureDate = decodeICAODate(data[index..<index+3])
+        let signData = data[index..<index+3]
+        let signHex = signData.map { String(format: "%02x", $0) }.joined(separator: " ")
+        let signatureDate = decodeICAODate(signData)
+        print("[Bytes \(index)-\(index+2)] Fecha firma (ICAO): \(signHex) → \(signatureDate?.description ?? "N/A")")
         index += 3
 
         // 7. Tipo de QR (1 byte)
         let qrTypeRaw = data[index]
         let qrType = MiDNIData.QRType(rawValue: qrTypeRaw) ?? .simple
+        print("[Byte \(index)] Tipo QR: 0x\(String(format: "%02x", qrTypeRaw)) → \(qrType.description)")
         index += 1
 
         // 8. Categoría de documento (1 byte)
         let documentCategory = data[index]
+        print("[Byte \(index)] Categoría documento: 0x\(String(format: "%02x", documentCategory))")
         index += 1
+
+        print("\n" + String(repeating: "-", count: 80))
+        print("📦 INICIO DE CAMPOS TLV (Tag-Length-Value)")
+        print(String(repeating: "-", count: 80))
 
         var miDNI = MiDNIData(
             magicConstant: magicConstant,
@@ -157,6 +183,8 @@ class MiDNIQRScanner: NSObject {
         // 9. Parsear TLV (cuerpo del mensaje)
         parseTLVFields(data, startIndex: index, miDNI: &miDNI)
 
+        print(String(repeating: "=", count: 80) + "\n")
+
         return miDNI
     }
 
@@ -164,28 +192,35 @@ class MiDNIQRScanner: NSObject {
 
     private func parseTLVFields(_ data: Data, startIndex: Int, miDNI: inout MiDNIData) {
         var index = startIndex
+        var fieldNumber = 1
 
         while index < data.count {
+            let tagOffset = index
             let tag = data[index]
             index += 1
 
             // Firma: último campo
             if tag == 0xFF {
-                print("📝 Firma encontrada en posición \(index-1)")
+                print("\n[Byte \(tagOffset)] Tag 0xFF: FIRMA (fin de campos TLV)")
+                let remainingBytes = data.count - tagOffset
+                print("   Bytes restantes (firma + padding): \(remainingBytes)")
                 break
             }
 
             // Leer longitud
             var length = 0
+            let lengthOffset = index
             let firstLengthByte = data[index]
             index += 1
 
+            var lengthBytes = 1
             if firstLengthByte & 0x80 == 0 {
                 // Longitud corta (1 byte)
                 length = Int(firstLengthByte)
             } else {
                 // Longitud larga
                 let numLengthBytes = Int(firstLengthByte & 0x7F)
+                lengthBytes = 1 + numLengthBytes
                 for _ in 0..<numLengthBytes {
                     length = (length << 8) | Int(data[index])
                     index += 1
@@ -193,55 +228,71 @@ class MiDNIQRScanner: NSObject {
             }
 
             guard index + length <= data.count else {
-                print("⚠️ Longitud inválida en tag \(String(format: "0x%02x", tag))")
+                print("⚠️ [Byte \(tagOffset)] Tag 0x\(String(format: "%02x", tag)): Longitud inválida (\(length) bytes excede datos disponibles)")
                 break
             }
 
+            let valueOffset = index
             let value = data[index..<index+length]
+            let valueHex = value.prefix(min(20, value.count)).map { String(format: "%02x", $0) }.joined(separator: " ")
+            let valueHexSuffix = value.count > 20 ? "..." : ""
+
             index += length
 
             // Procesar según el tag
+            print("\n[Byte \(tagOffset)] Campo #\(fieldNumber) - Tag 0x\(String(format: "%02x", tag)):")
+            print("   Length: \(length) bytes (offset \(lengthOffset), \(lengthBytes) byte(s))")
+            print("   Value offset: \(valueOffset)")
+            print("   Value hex: \(valueHex)\(valueHexSuffix)")
+
             switch tag {
             case 0x40: // Número de DNI
                 miDNI.dniNumber = String(data: value, encoding: .ascii)
-                print("🆔 DNI: \(miDNI.dniNumber ?? "N/A")")
+                print("   → 🆔 DNI: \(miDNI.dniNumber ?? "N/A")")
 
             case 0x42: // Fecha de nacimiento
                 miDNI.birthDate = String(data: value, encoding: .ascii)
-                print("🎂 Fecha nacimiento: \(miDNI.birthDate ?? "N/A")")
+                print("   → 🎂 Fecha nacimiento: \(miDNI.birthDate ?? "N/A")")
 
             case 0x44: // Nombre
                 miDNI.name = String(data: value, encoding: .utf8)
-                print("👤 Nombre: \(miDNI.name ?? "N/A")")
+                print("   → 👤 Nombre: \(miDNI.name ?? "N/A")")
 
             case 0x46: // Apellidos
                 miDNI.surnames = String(data: value, encoding: .utf8)
-                print("👥 Apellidos: \(miDNI.surnames ?? "N/A")")
+                print("   → 👥 Apellidos: \(miDNI.surnames ?? "N/A")")
 
             case 0x48: // Sexo
                 miDNI.sex = String(data: value, encoding: .ascii)
-                print("⚥ Sexo: \(miDNI.sex ?? "N/A")")
+                print("   → ⚥ Sexo: \(miDNI.sex ?? "N/A")")
 
             case 0x4C: // Fecha caducidad documento
                 miDNI.documentExpiryDate = String(data: value, encoding: .ascii)
-                print("📅 Caducidad doc: \(miDNI.documentExpiryDate ?? "N/A")")
+                print("   → 📅 Caducidad doc: \(miDNI.documentExpiryDate ?? "N/A")")
 
             case 0x50: // Imagen miniatura
                 miDNI.photo = value
-                print("🖼️ Foto: \(value.count) bytes (JPEG2000)")
+                print("   → 🖼️ Foto: \(value.count) bytes (JPEG2000)")
+                print("      Primeros bytes: \(value.prefix(16).map { String(format: "%02x", $0) }.joined(separator: " "))")
 
             case 0x70: // Mayor de edad
                 miDNI.isAdult = value.first == 0x01
-                print("🔞 Mayor de edad: \(miDNI.isAdult == true ? "SÍ" : "NO")")
+                print("   → 🔞 Mayor de edad: \(miDNI.isAdult == true ? "SÍ (0x01)" : "NO (0x00)")")
 
             case 0x80: // Caducidad de los datos del QR
                 let dateString = String(data: value, encoding: .ascii) ?? ""
                 miDNI.dataExpiryDate = parseDataExpiryDate(dateString)
-                print("⏱️ Caducidad datos: \(dateString)")
+                print("   → ⏱️ Caducidad datos: \(dateString)")
 
             default:
-                print("ℹ️ Tag desconocido: 0x\(String(format: "%02x", tag)) (\(length) bytes)")
+                print("   → ℹ️ Tag desconocido")
+                if length < 100 {
+                    let fullHex = value.map { String(format: "%02x", $0) }.joined(separator: " ")
+                    print("      Valor completo: \(fullHex)")
+                }
             }
+
+            fieldNumber += 1
         }
     }
 
