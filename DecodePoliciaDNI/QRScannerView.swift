@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AVFoundation
+import AudioToolbox
 
 struct QRScannerView: View {
     @Environment(\.dismiss) var dismiss
@@ -72,28 +73,33 @@ struct QRScannerView: View {
 }
 
 // MARK: - ViewModel
-class QRScannerViewModel: ObservableObject {
+class QRScannerViewModel: NSObject, ObservableObject {
     @Published var isScanning = false
     @Published var scanError: String?
 
     let session = AVCaptureSession()
     private let scanner = MiDNIQRScanner()
+    private var metadataOutput: AVCaptureMetadataOutput?
     private var setupComplete = false
 
     func checkCameraPermission() {
+        print("🔍 Verificando permisos de cámara...")
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
+            print("✅ Permisos de cámara autorizados")
             setupCamera()
         case .notDetermined:
+            print("⏳ Solicitando permisos de cámara...")
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 if granted {
+                    print("✅ Usuario concedió permisos de cámara")
                     DispatchQueue.main.async {
                         self?.setupCamera()
                     }
                 } else {
                     DispatchQueue.main.async {
                         self?.scanError = "Permiso de cámara denegado"
-                        print("❌ Permiso de cámara denegado")
+                        print("❌ Usuario denegó permisos de cámara")
                     }
                 }
             }
@@ -106,8 +112,12 @@ class QRScannerViewModel: ObservableObject {
     }
 
     private func setupCamera() {
-        guard !setupComplete else { return }
+        guard !setupComplete else {
+            print("⚠️ Cámara ya configurada, saltando setup")
+            return
+        }
 
+        print("🎥 Iniciando configuración de cámara...")
         session.beginConfiguration()
 
         guard let videoCaptureDevice = AVCaptureDevice.default(for: .video) else {
@@ -126,15 +136,18 @@ class QRScannerViewModel: ObservableObject {
                 return
             }
 
-            let metadataOutput = AVCaptureMetadataOutput()
+            let output = AVCaptureMetadataOutput()
+            self.metadataOutput = output
 
-            if session.canAddOutput(metadataOutput) {
-                session.addOutput(metadataOutput)
+            if session.canAddOutput(output) {
+                session.addOutput(output)
 
-                metadataOutput.setMetadataObjectsDelegate(scanner, queue: DispatchQueue.main)
-                metadataOutput.metadataObjectTypes = [.qr]
+                output.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
+                output.metadataObjectTypes = [.qr]
 
                 print("✅ Salida de metadatos configurada")
+                print("✅ Delegate configurado: \(self)")
+                print("✅ Tipos de metadata: \(output.metadataObjectTypes)")
             } else {
                 print("❌ No se pudo agregar la salida de metadatos")
                 return
@@ -148,7 +161,10 @@ class QRScannerViewModel: ObservableObject {
 
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 self?.session.startRunning()
-                print("✅ Sesión de captura iniciada")
+                DispatchQueue.main.async {
+                    print("✅ Sesión de captura iniciada y corriendo")
+                    print("🔍 Esperando código QR...")
+                }
             }
 
         } catch {
@@ -168,6 +184,41 @@ class QRScannerViewModel: ObservableObject {
 
     deinit {
         stopScanning()
+    }
+}
+
+// MARK: - AVCaptureMetadataOutputObjectsDelegate
+extension QRScannerViewModel: AVCaptureMetadataOutputObjectsDelegate {
+    func metadataOutput(_ output: AVCaptureMetadataOutput,
+                       didOutput metadataObjects: [AVMetadataObject],
+                       from connection: AVCaptureConnection) {
+
+        print("🎯 DELEGATE LLAMADO! Objetos detectados: \(metadataObjects.count)")
+
+        guard let metadataObject = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
+              let stringValue = metadataObject.stringValue else {
+            print("⚠️ No se pudo extraer el valor del QR")
+            return
+        }
+
+        print("📲 QR detectado! Longitud del string: \(stringValue.count)")
+        print("📲 Primeros 50 caracteres: \(String(stringValue.prefix(50)))")
+
+        // Vibración de feedback
+        AudioServicesPlaySystemSound(SystemSoundID(kSystemSoundID_Vibrate))
+
+        if let miDNI = scanner.decodeQRData(stringValue) {
+            scanner.printSummary(miDNI)
+
+            DispatchQueue.main.async {
+                self.isScanning = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    self.isScanning = false
+                }
+            }
+        } else {
+            print("❌ No se pudo decodificar el QR como miDNI")
+        }
     }
 }
 
