@@ -77,12 +77,16 @@ class QRScannerViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        print("🎬 QRScannerViewController - viewDidLoad()")
         setupUI()
         setupNavigationBar()
+        print("✅ QRScannerViewController - UI configurada")
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        print("🎬 QRScannerViewController - viewDidAppear()")
+        print("📱 View bounds: \(view.bounds)")
         checkCameraPermission()
     }
 
