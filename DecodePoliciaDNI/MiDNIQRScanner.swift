@@ -482,12 +482,10 @@ class MiDNIQRScanner: NSObject {
         }
 
         if let hexDump = miDNI.rawHexDump {
-            print("\n💾 DUMP HEXADECIMAL COMPLETO:")
+            print("\n💾 DUMP HEXADECIMAL COMPLETO (sin espacios, sin guiones):")
             print("   Longitud: \(hexDump.count) caracteres hex (\(hexDump.count / 2) bytes)")
-            print("   Primeros 100 caracteres: \(String(hexDump.prefix(100)))")
-            if hexDump.count > 100 {
-                print("   ...")
-            }
+            print("   Contenido completo:")
+            print(hexDump)
         }
 
         print(String(repeating: "=", count: 50) + "\n")
