@@ -1,90 +1,175 @@
 //
-//  QRScannerView.swift
+//  QRScannerViewController.swift
 //  DecodePoliciaDNI
 //
-//  Created by Jesus Mora on 1/11/25.
+//  Created by Claude on 2/11/25.
 //
 
-import SwiftUI
+import UIKit
 import AVFoundation
 import AudioToolbox
-import Combine
 import CoreImage
 import Vision
 
-struct QRScannerView: View {
-    @Environment(\.dismiss) var dismiss
-    @StateObject private var viewModel = QRScannerViewModel()
+class QRScannerViewController: UIViewController {
 
-    var body: some View {
-        NavigationView {
-            ZStack {
-                // Vista de la cámara
-                CameraPreview(session: viewModel.session)
-                    .edgesIgnoringSafeArea(.all)
+    // MARK: - Properties
 
-                // Overlay con marco de escaneo
-                VStack {
-                    Spacer()
-
-                    // Marco de escaneo
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.green, lineWidth: 4)
-                        .frame(width: 280, height: 280)
-
-                    Spacer()
-
-                    // Instrucciones
-                    Text("Escanea el código QR de tu miDNI")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .padding()
-                        .background(Color.black.opacity(0.7))
-                        .cornerRadius(10)
-                        .padding(.bottom, 50)
-                }
-
-                // Estado de escaneo
-                if viewModel.isScanning {
-                    Color.green.opacity(0.3)
-                        .edgesIgnoringSafeArea(.all)
-                        .overlay(
-                            VStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 80))
-                                    .foregroundColor(.green)
-                                Text("¡QR Detectado!")
-                                    .font(.title)
-                                    .foregroundColor(.white)
-                                    .padding()
-                            }
-                        )
-                }
-            }
-            .navigationBarTitle("Escanear miDNI", displayMode: .inline)
-            .navigationBarItems(trailing: Button("Cerrar") {
-                dismiss()
-            })
-            .onAppear {
-                viewModel.checkCameraPermission()
-            }
-            .onDisappear {
-                viewModel.stopScanning()
-            }
-        }
-    }
-}
-
-// MARK: - ViewModel
-class QRScannerViewModel: NSObject, ObservableObject {
-    @Published var isScanning = false
-    @Published var scanError: String?
-
-    let session = AVCaptureSession()
+    private var session = AVCaptureSession()
+    private var previewLayer: AVCaptureVideoPreviewLayer?
     private let scanner = MiDNIQRScanner()
     private var setupComplete = false
+    private var isScanning = false
 
-    func checkCameraPermission() {
+    // MARK: - UI Components
+
+    private let scanningFrameView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.layer.borderColor = UIColor.systemGreen.cgColor
+        view.layer.borderWidth = 4
+        view.layer.cornerRadius = 20
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+
+    private let instructionLabel: UILabel = {
+        let label = UILabel()
+        label.text = "Escanea el código QR de tu miDNI"
+        label.font = UIFont.systemFont(ofSize: 17, weight: .semibold)
+        label.textColor = .white
+        label.textAlignment = .center
+        label.backgroundColor = UIColor.black.withAlphaComponent(0.7)
+        label.layer.cornerRadius = 10
+        label.clipsToBounds = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
+
+    private let successOverlay: UIView = {
+        let view = UIView()
+        view.backgroundColor = UIColor.systemGreen.withAlphaComponent(0.3)
+        view.isHidden = true
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+
+    private let successIconImageView: UIImageView = {
+        let imageView = UIImageView()
+        imageView.image = UIImage(systemName: "checkmark.circle.fill")
+        imageView.tintColor = .systemGreen
+        imageView.contentMode = .scaleAspectFit
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        return imageView
+    }()
+
+    private let successLabel: UILabel = {
+        let label = UILabel()
+        label.text = "¡QR Detectado!"
+        label.font = UIFont.systemFont(ofSize: 28, weight: .bold)
+        label.textColor = .white
+        label.textAlignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
+
+    // MARK: - Lifecycle
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupUI()
+        setupNavigationBar()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        checkCameraPermission()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        stopScanning()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        previewLayer?.frame = view.bounds
+    }
+
+    deinit {
+        stopScanning()
+    }
+
+    // MARK: - Setup
+
+    private func setupUI() {
+        view.backgroundColor = .black
+
+        // Add success overlay
+        view.addSubview(successOverlay)
+        successOverlay.addSubview(successIconImageView)
+        successOverlay.addSubview(successLabel)
+
+        // Add scanning frame
+        view.addSubview(scanningFrameView)
+
+        // Add instruction label
+        view.addSubview(instructionLabel)
+
+        // Setup constraints
+        NSLayoutConstraint.activate([
+            // Success overlay (full screen)
+            successOverlay.topAnchor.constraint(equalTo: view.topAnchor),
+            successOverlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            successOverlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            successOverlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            // Success icon
+            successIconImageView.centerXAnchor.constraint(equalTo: successOverlay.centerXAnchor),
+            successIconImageView.centerYAnchor.constraint(equalTo: successOverlay.centerYAnchor, constant: -30),
+            successIconImageView.widthAnchor.constraint(equalToConstant: 80),
+            successIconImageView.heightAnchor.constraint(equalToConstant: 80),
+
+            // Success label
+            successLabel.topAnchor.constraint(equalTo: successIconImageView.bottomAnchor, constant: 20),
+            successLabel.centerXAnchor.constraint(equalTo: successOverlay.centerXAnchor),
+
+            // Scanning frame
+            scanningFrameView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            scanningFrameView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            scanningFrameView.widthAnchor.constraint(equalToConstant: 280),
+            scanningFrameView.heightAnchor.constraint(equalToConstant: 280),
+
+            // Instruction label
+            instructionLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -50),
+            instructionLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
+            instructionLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
+            instructionLabel.heightAnchor.constraint(equalToConstant: 44)
+        ])
+    }
+
+    private func setupNavigationBar() {
+        title = "Escanear miDNI"
+
+        // Add close button
+        let closeButton = UIBarButtonItem(
+            title: "Cerrar",
+            style: .plain,
+            target: self,
+            action: #selector(closeButtonTapped)
+        )
+        navigationItem.rightBarButtonItem = closeButton
+
+        // Embed in navigation controller if not already
+        if navigationController == nil {
+            let navController = UINavigationController(rootViewController: self)
+            navController.modalPresentationStyle = .fullScreen
+        }
+    }
+
+    // MARK: - Camera Setup
+
+    private func checkCameraPermission() {
         print("🔍 Verificando permisos de cámara...")
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
@@ -99,15 +184,12 @@ class QRScannerViewModel: NSObject, ObservableObject {
                         self?.setupCamera()
                     }
                 } else {
-                    DispatchQueue.main.async {
-                        self?.scanError = "Permiso de cámara denegado"
-                        print("❌ Usuario denegó permisos de cámara")
-                    }
+                    print("❌ Usuario denegó permisos de cámara")
                 }
             }
         case .denied, .restricted:
-            scanError = "Permiso de cámara denegado. Por favor, habilítalo en Configuración."
             print("❌ Permiso de cámara denegado o restringido")
+            showPermissionAlert()
         @unknown default:
             break
         }
@@ -150,6 +232,13 @@ class QRScannerViewModel: NSObject, ObservableObject {
                 return
             }
 
+            // Setup preview layer
+            let previewLayer = AVCaptureVideoPreviewLayer(session: session)
+            previewLayer.videoGravity = .resizeAspectFill
+            previewLayer.frame = view.bounds
+            view.layer.insertSublayer(previewLayer, at: 0)
+            self.previewLayer = previewLayer
+
             session.commitConfiguration()
             setupComplete = true
 
@@ -166,11 +255,10 @@ class QRScannerViewModel: NSObject, ObservableObject {
 
         } catch {
             print("❌ Error al configurar la cámara: \(error.localizedDescription)")
-            scanError = "Error al configurar la cámara"
         }
     }
 
-    func stopScanning() {
+    private func stopScanning() {
         if session.isRunning {
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 self?.session.stopRunning()
@@ -179,13 +267,45 @@ class QRScannerViewModel: NSObject, ObservableObject {
         }
     }
 
-    deinit {
-        stopScanning()
+    // MARK: - Actions
+
+    @objc private func closeButtonTapped() {
+        dismiss(animated: true)
+    }
+
+    private func showPermissionAlert() {
+        let alert = UIAlertController(
+            title: "Permiso de Cámara Requerido",
+            message: "Por favor, habilita el acceso a la cámara en Configuración para escanear códigos QR.",
+            preferredStyle: .alert
+        )
+
+        alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Configuración", style: .default) { _ in
+            if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(settingsUrl)
+            }
+        })
+
+        present(alert, animated: true)
+    }
+
+    private func showSuccess() {
+        DispatchQueue.main.async { [weak self] in
+            self?.isScanning = true
+            self?.successOverlay.isHidden = false
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                self?.isScanning = false
+                self?.successOverlay.isHidden = true
+            }
+        }
     }
 }
 
 // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
-extension QRScannerViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
+
+extension QRScannerViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput,
                       didOutput sampleBuffer: CMSampleBuffer,
                       from connection: AVCaptureConnection) {
@@ -306,10 +426,6 @@ extension QRScannerViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
         // Bit 20 está en el byte 2, bit 4
         // Necesitamos extraer desde bit 20 en adelante y realinear a bytes
 
-        // Calcular cuántos bytes completos de datos tenemos
-        // Tenemos que extraer desde el bit 20
-        // El bit 20 está en byte 2, posición 4 (contando desde 0)
-
         var outputData = Data()
         var currentBit = 20  // Empezar desde el bit 20
 
@@ -382,49 +498,4 @@ extension QRScannerViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
 
         return nil
     }
-
-    private func showSuccess() {
-        DispatchQueue.main.async {
-            self.isScanning = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                self.isScanning = false
-            }
-        }
-    }
-}
-
-// MARK: - Camera Preview
-struct CameraPreview: UIViewRepresentable {
-    let session: AVCaptureSession
-
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: .zero)
-        view.backgroundColor = .black
-
-        let previewLayer = AVCaptureVideoPreviewLayer(session: session)
-        previewLayer.videoGravity = .resizeAspectFill
-        view.layer.addSublayer(previewLayer)
-
-        context.coordinator.previewLayer = previewLayer
-
-        return view
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) {
-        DispatchQueue.main.async {
-            context.coordinator.previewLayer?.frame = uiView.bounds
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    class Coordinator {
-        var previewLayer: AVCaptureVideoPreviewLayer?
-    }
-}
-
-#Preview {
-    QRScannerView()
 }

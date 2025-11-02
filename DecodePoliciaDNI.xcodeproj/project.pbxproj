@@ -254,7 +254,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = W6C3W6NZ55;
-				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Necesitamos acceso a la cámara para escanear códigos QR de tu DNI digital español (miDNI)";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -287,7 +286,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = W6C3W6NZ55;
-				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Necesitamos acceso a la cámara para escanear códigos QR de tu DNI digital español (miDNI)";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
