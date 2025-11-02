@@ -33,6 +33,9 @@ class MiDNIQRScanner: NSObject {
         var isAdult: Bool?
         var dataExpiryDate: Date?
 
+        // Dump hexadecimal completo (sin espacios, sin offsets, sin guiones)
+        var rawHexDump: String?
+
         var isValid: Bool {
             return magicConstant == 0xDC && version == 0x03
         }
@@ -63,7 +66,16 @@ class MiDNIQRScanner: NSObject {
             return nil
         }
 
-        return parseMiDNIStructure(data)
+        // Generar el dump hexadecimal completo (sin espacios, sin offsets, sin guiones)
+        let hexDump = data.map { String(format: "%02x", $0) }.joined()
+        print("💾 Dump hexadecimal completo guardado: \(hexDump.count) caracteres")
+
+        var miDNI = parseMiDNIStructure(data)
+
+        // Guardar el dump hexadecimal en la estructura
+        miDNI?.rawHexDump = hexDump
+
+        return miDNI
     }
 
     /// Decodifica desde string (para retrocompatibilidad)
@@ -467,6 +479,15 @@ class MiDNIQRScanner: NSObject {
             let formatter = DateFormatter()
             formatter.dateStyle = .medium
             print("📅 Emisión: \(formatter.string(from: issueDate))")
+        }
+
+        if let hexDump = miDNI.rawHexDump {
+            print("\n💾 DUMP HEXADECIMAL COMPLETO:")
+            print("   Longitud: \(hexDump.count) caracteres hex (\(hexDump.count / 2) bytes)")
+            print("   Primeros 100 caracteres: \(String(hexDump.prefix(100)))")
+            if hexDump.count > 100 {
+                print("   ...")
+            }
         }
 
         print(String(repeating: "=", count: 50) + "\n")
