@@ -159,12 +159,6 @@ class QRScannerViewController: UIViewController {
             action: #selector(closeButtonTapped)
         )
         navigationItem.rightBarButtonItem = closeButton
-
-        // Embed in navigation controller if not already
-        if navigationController == nil {
-            let navController = UINavigationController(rootViewController: self)
-            navController.modalPresentationStyle = .fullScreen
-        }
     }
 
     // MARK: - Camera Setup
@@ -232,24 +226,31 @@ class QRScannerViewController: UIViewController {
                 return
             }
 
-            // Setup preview layer
-            let previewLayer = AVCaptureVideoPreviewLayer(session: session)
-            previewLayer.videoGravity = .resizeAspectFill
-            previewLayer.frame = view.bounds
-            view.layer.insertSublayer(previewLayer, at: 0)
-            self.previewLayer = previewLayer
-
             session.commitConfiguration()
             setupComplete = true
 
             print("✅ Cámara configurada correctamente")
-            print("📸 Iniciando sesión de captura...")
 
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                self?.session.startRunning()
-                DispatchQueue.main.async {
-                    print("✅ Sesión de captura iniciada y corriendo")
-                    print("🔍 Esperando código QR...")
+            // Setup preview layer en el main thread
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+
+                let previewLayer = AVCaptureVideoPreviewLayer(session: self.session)
+                previewLayer.videoGravity = .resizeAspectFill
+                previewLayer.frame = self.view.bounds
+                self.view.layer.insertSublayer(previewLayer, at: 0)
+                self.previewLayer = previewLayer
+
+                print("✅ Preview layer configurado con frame: \(self.view.bounds)")
+                print("📸 Iniciando sesión de captura...")
+
+                // Iniciar la sesión en background thread
+                DispatchQueue.global(qos: .userInitiated).async {
+                    self.session.startRunning()
+                    DispatchQueue.main.async {
+                        print("✅ Sesión de captura iniciada y corriendo")
+                        print("🔍 Esperando código QR...")
+                    }
                 }
             }
 

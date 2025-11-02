@@ -115,7 +115,8 @@ class MainViewController: UIViewController {
     @objc private func scanButtonTapped() {
         print("🚀 Abriendo escáner de QR...")
         let scannerVC = QRScannerViewController()
-        scannerVC.modalPresentationStyle = .fullScreen
-        present(scannerVC, animated: true)
+        let navController = UINavigationController(rootViewController: scannerVC)
+        navController.modalPresentationStyle = .fullScreen
+        present(navController, animated: true)
     }
 }
