@@ -55,23 +55,53 @@ class MiDNIQRScanner: NSObject {
     // MARK: - QR Decoding
 
     func decodeQRData(_ stringValue: String) -> MiDNIData? {
+        print("\n" + String(repeating: "🔷", count: 40))
+        print("🔍 DECODIFICANDO QR SEGÚN ICAO 9303-13")
+        print(String(repeating: "🔷", count: 40))
+
         var rawData: Data?
 
         // Método 1: Base64
         if let decoded = Data(base64Encoded: stringValue) {
             rawData = decoded
-            print("✅ Decodificado como Base64")
+            print("✅ Decodificado como Base64 (\(decoded.count) bytes)")
         }
         // Método 2: ISO Latin 1 (binario directo)
         else if let decoded = stringValue.data(using: .isoLatin1) {
             rawData = decoded
-            print("✅ Decodificado como ISO Latin 1")
+            print("✅ Decodificado como ISO Latin 1 (\(decoded.count) bytes)")
         }
 
         guard let data = rawData, data.count > 38 else {
-            print("❌ Datos insuficientes")
+            print("❌ Datos insuficientes: \(rawData?.count ?? 0) bytes (mínimo: 38)")
             return nil
         }
+
+        // Imprimir hexadecimal completo inmediatamente
+        let hexDump = data.map { String(format: "%02x", $0) }.joined()
+
+        print("\n" + String(repeating: "=", count: 80))
+        print("💾 HEXADECIMAL COMPLETO DEL QR DECODIFICADO")
+        print(String(repeating: "=", count: 80))
+        print("📏 Longitud: \(hexDump.count) caracteres hex (\(data.count) bytes)")
+        print("\n--- HEXADECIMAL CONTINUO (copiar/pegar) ---")
+        print(hexDump)
+        print(String(repeating: "-", count: 80))
+
+        // Versión formateada para lectura
+        print("\n--- HEXADECIMAL FORMATEADO (lectura humana) ---")
+        let hexBytes = stride(from: 0, to: hexDump.count, by: 2).map {
+            String(hexDump[hexDump.index(hexDump.startIndex, offsetBy: $0)..<hexDump.index(hexDump.startIndex, offsetBy: min($0 + 2, hexDump.count))])
+        }
+
+        let bytesPerLine = 16
+        for lineStart in stride(from: 0, to: hexBytes.count, by: bytesPerLine) {
+            let lineEnd = min(lineStart + bytesPerLine, hexBytes.count)
+            let lineHex = hexBytes[lineStart..<lineEnd].joined(separator: " ")
+            let offset = String(format: "%04x", lineStart)
+            print("\(offset): \(lineHex)")
+        }
+        print(String(repeating: "=", count: 80) + "\n")
 
         return parseMiDNIStructure(data)
     }
@@ -293,13 +323,16 @@ class MiDNIQRScanner: NSObject {
     // MARK: - Print Summary
 
     func printSummary(_ miDNI: MiDNIData) {
-        print("\n" + String(repeating: "=", count: 50))
-        print("📱 RESUMEN DEL QR DE miDNI")
-        print(String(repeating: "=", count: 50))
+        print("\n" + String(repeating: "=", count: 80))
+        print("📱 RESUMEN FINAL DEL QR DE miDNI")
+        print(String(repeating: "=", count: 80))
 
-        print("\n✅ Validez: \(miDNI.isValid ? "VÁLIDO" : "INVÁLIDO")")
+        print("\n✅ Validez: \(miDNI.isValid ? "VÁLIDO ✓" : "INVÁLIDO ✗")")
+        print("   Magic: 0x\(String(format: "%02X", miDNI.magicConstant)) (esperado: 0xDC)")
+        print("   Version: 0x\(String(format: "%02X", miDNI.version)) (esperado: 0x03)")
         print("🏳️  País: \(miDNI.country)")
         print("📋 Tipo: \(miDNI.qrType.description)")
+        print("📄 Categoría: 0x\(String(format: "%02X", miDNI.documentCategory))")
 
         if let dni = miDNI.dniNumber {
             print("\n🆔 DNI: \(dni)")
@@ -325,6 +358,10 @@ class MiDNIQRScanner: NSObject {
             print("🔞 Mayor de edad: \(isAdult ? "SÍ ✅" : "NO ❌")")
         }
 
+        if let documentExpiry = miDNI.documentExpiryDate {
+            print("📅 Caducidad documento: \(documentExpiry)")
+        }
+
         if let expiryDate = miDNI.dataExpiryDate {
             let formatter = DateFormatter()
             formatter.dateStyle = .medium
@@ -337,7 +374,8 @@ class MiDNIQRScanner: NSObject {
         }
 
         if let photo = miDNI.photo {
-            print("🖼️  Foto: \(photo.count) bytes")
+            print("🖼️  Foto: \(photo.count) bytes (JPEG2000)")
+            print("   Primeros bytes: \(photo.prefix(8).map { String(format: "%02x", $0) }.joined(separator: " "))")
         }
 
         print("\n🔐 Certificado: \(miDNI.signerReference)")
@@ -348,7 +386,14 @@ class MiDNIQRScanner: NSObject {
             print("📅 Emisión: \(formatter.string(from: issueDate))")
         }
 
-        print(String(repeating: "=", count: 50) + "\n")
+        if let signDate = miDNI.signatureDate {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            print("✍️  Firma: \(formatter.string(from: signDate))")
+        }
+
+        print("\n✅ Decodificación completada según estándar ICAO 9303-13 (VDS)")
+        print(String(repeating: "=", count: 80) + "\n")
     }
 }
 
