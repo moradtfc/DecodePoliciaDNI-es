@@ -1,0 +1,29 @@
+/* 
+   Localizable.strings
+   VerifyDNI
+   
+   Textos localizables de la aplicación
+*/
+
+// MARK: - ScanModal
+
+// Títulos
+"scan_modal.qr.title" = "Listo para escanear";
+"scan_modal.nfc.title" = "Leer chip del DNI";
+
+// Descripciones
+"scan_modal.qr.description" = "Asegúrate de que el cliente tiene el QR de MiDNI visible en su pantalla antes de pulsar el botón.";
+"scan_modal.nfc.description" = "Apunta la cámara a la zona MRZ del DNI (las dos líneas de código en la parte inferior). La app leerá el chip automáticamente.";
+
+// Recordatorios
+"scan_modal.qr.reminder" = "El QR caduca a los 2 minutos";
+"scan_modal.nfc.reminder" = "Acerca el DNI a la parte trasera superior del iPhone";
+
+// Botones
+"scan_modal.qr.button" = "Escanear DNI";
+"scan_modal.nfc.button" = "Escanear DNI y leer chip";
+"scan_modal.cancel" = "Cancelar";
+
+// Estados de carga
+"scan_modal.qr.preparing" = "Preparando cámara...";
+"scan_modal.nfc.preparing" = "Cargando...";

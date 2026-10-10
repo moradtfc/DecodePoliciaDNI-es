@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundleDisplayName</key>
+	<string>VerifyDNI</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
+	<key>UILaunchScreen</key>
+	<dict>
+		<!-- Solo fondo oscuro. El logo animado lo gestiona LaunchScreenView en SwiftUI. -->
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>armv7</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>VerifyDNI necesita acceso a la cámara para escanear códigos QR y la zona MRZ del DNI físico.</string>
+	<key>NFCReaderUsageDescription</key>
+	<string>VerifyDNI necesita acceso NFC para leer los datos del chip del DNI físico español.</string>
+	<key>com.apple.developer.nfc.readersession.formats</key>
+	<array>
+		<string>NDEF</string>
+		<string>TAG</string>
+	</array>
+	<!-- ISO 7816 Application Identifiers — REQUIRED for NFCTagReaderSession to detect eMRTD chips (Spanish DNI, passports).
+	     Without this list iOS 13+ will NOT connect to ISO 7816-4 tags.
+	     A0000002471001 = ICAO 9303 eMRTD application (DNI, passports worldwide). -->
+	<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
+	<array>
+		<string>A0000002471001</string>
+		<string>A000000003101001</string>
+		<string>A000000003101002</string>
+		<string>D2760000850100</string>
+		<string>D2760000850101</string>
+	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Excepción específica para el servidor de certificados de la Policía Nacional.
+		     Su CA raíz (AC RAIZ DGP 2) no está en el almacén de iOS, por lo que
+		     la evaluación de confianza la realiza PoliciaURLSessionDelegate mediante
+		     SecTrustSetAnchorCertificates. Sin esta entrada ATS bloquea la conexión
+		     antes de que el delegado pueda intervenir. -->
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>pki.policia.es</key>
+			<dict>
+				<!-- Mantener HTTPS obligatorio -->
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<!-- Relajar forward secrecy para compatibilidad con el servidor del gobierno -->
+				<key>NSThirdPartyExceptionRequiresForwardSecrecy</key>
+				<false/>
+				<!-- TLS 1.2 mínimo -->
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+			</dict>
+		</dict>
+	</dict>
+</dict>
+</plist>

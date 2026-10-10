@@ -1,0 +1,28 @@
+# Xcode
+*.pbxproj
+*.xcworkspace
+DerivedData/
+*.xcarchive
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# CocoaPods
+Pods/
+Podfile.lock
+*.podspec
+
+# macOS
+.DS_Store
+*.swp
+*~
+.vscode/
+
+# Build artifacts
+build/
+*.app
+*.framework
+
+# Derived Data
+.build/
+.swiftpm/
