@@ -34,10 +34,7 @@ struct HomeView: View {
                     VStack(spacing: 16) {
                         Spacer(minLength: 8)
 
-                        // 1. Banner de conexión
-                        connectionBanner
-
-                        // 2. Card NFC — abre ScanModal modo NFC
+                        // Card NFC — abre ScanModal modo NFC
                         Button {
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                 showNFCScanModal = true
@@ -72,11 +69,11 @@ struct HomeView: View {
                         // 4. Footer último escaneo
                         lastScanFooter
 
-                        Spacer(minLength: ScreenSize.isSmall ? 24 : 32)
+                        Spacer(minLength: 16)
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
-                    .padding(.bottom, ScreenSize.isSmall ? 90 : 120)
+                    .padding(.bottom, 32)
                 }
             }
         }
@@ -136,92 +133,17 @@ struct HomeView: View {
         HStack(alignment: .center) {
             VerifyDNILogo(fontSize: 22)
             Spacer()
-            connectionDot
+            Text("v\(appVersion)")
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(Color(white: 0.4))
         }
         .padding(.horizontal, 16)
         .padding(.top, 16)
         .padding(.bottom, 8)
     }
 
-    // MARK: - Connection Dot
-
-    private var connectionDot: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(connectionColor)
-                .frame(width: 7, height: 7)
-            Text(connectionLabel)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(connectionColor)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(Capsule().fill(connectionColor.opacity(0.10)))
-        .animation(.easeInOut(duration: 0.3), value: viewModel.connectionState)
-    }
-
-    private var connectionColor: Color {
-        switch viewModel.connectionState {
-        case .connected:    return Color(hex: "#4ade80")
-        case .connecting:   return Color(hex: "#facc15")
-        case .disconnected: return Color(hex: "#ef4444")
-        }
-    }
-
-    private var connectionLabel: String {
-        switch viewModel.connectionState {
-        case .connected:    return "Conectado"
-        case .connecting:   return "Conectando"
-        case .disconnected: return "Sin conexión"
-        }
-    }
-
-    // MARK: - Banner de conexión
-
-    private var connectionBanner: some View {
-        let config = BannerConfig(
-            state: viewModel.connectionState,
-            establishmentName: viewModel.establishmentName
-        )
-        return HStack(spacing: 12) {
-            ZStack {
-                if viewModel.connectionState == .connected {
-                    PulsingDot(color: config.dotColor)
-                } else {
-                    Circle().fill(config.dotColor).frame(width: 10, height: 10)
-                }
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(config.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(config.titleColor)
-                    .lineLimit(nil)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(config.subtitle)
-                    .font(.system(size: 12))
-                    .foregroundColor(config.subtitleColor)
-                    .lineLimit(nil)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer()
-            if viewModel.connectionState == .disconnected {
-                Button {
-                    Task { await viewModel.refreshConnection() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Color(hex: "#ef4444"))
-                }
-                .accessibilityLabel("Reconectar")
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(config.backgroundColor)
-        )
-        .animation(.easeInOut(duration: 0.3), value: viewModel.connectionState)
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
 
     // MARK: - Card QR
@@ -455,70 +377,5 @@ struct HomeView: View {
         }
     }
 }
-
-// MARK: - BannerConfig
-
-private struct BannerConfig {
-    let backgroundColor: Color
-    let dotColor:        Color
-    let titleColor:      Color
-    let subtitleColor:   Color
-    let title:           String
-    let subtitle:        String
-
-    init(state: WebSocketManager.ConnectionState, establishmentName: String) {
-        switch state {
-        case .connected:
-            backgroundColor = Color(hex: "#0f2a0f")
-            dotColor        = Color(hex: "#4ade80")
-            titleColor      = Color(hex: "#4ade80")
-            subtitleColor   = Color(hex: "#166534")
-            title           = "Panel conectado"
-            subtitle        = establishmentName
-        case .connecting:
-            backgroundColor = Color(hex: "#1a1200")
-            dotColor        = Color(hex: "#facc15")
-            titleColor      = Color(hex: "#facc15")
-            subtitleColor   = Color(hex: "#713f12")
-            title           = "Conectando..."
-            subtitle        = "Estableciendo conexión"
-        case .disconnected:
-            backgroundColor = Color(hex: "#1a0a0a")
-            dotColor        = Color(hex: "#ef4444")
-            titleColor      = Color(hex: "#ef4444")
-            subtitleColor   = Color(hex: "#7f1d1d")
-            title           = "Panel no conectado"
-            subtitle        = "Los datos no llegarán al ordenador"
-        }
-    }
-}
-
-// MARK: - PulsingDot
-
-private struct PulsingDot: View {
-    let color: Color
-    @State private var scale:   CGFloat = 1.0
-    @State private var opacity: Double  = 0.7
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(color.opacity(opacity * 0.4))
-                .frame(width: 18, height: 18)
-                .scaleEffect(scale)
-            Circle()
-                .fill(color)
-                .frame(width: 10, height: 10)
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
-                scale   = 1.6
-                opacity = 0.1
-            }
-        }
-    }
-}
-
-// MARK: - Preview
 
 #Preview { HomeView() }
