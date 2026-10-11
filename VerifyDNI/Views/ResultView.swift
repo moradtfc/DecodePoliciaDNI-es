@@ -421,16 +421,15 @@ private extension ResultView {
 
             // WhatsApp
             Button {
-                if let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                   let url = URL(string: "https://wa.me/?text=\(encoded)") {
+                let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                if let url = URL(string: "https://wa.me/?text=\(encoded)") {
                     UIApplication.shared.open(url)
                     showShareOptions = false
                 }
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "bubble.right.fill")
-                        .foregroundColor(Color(hex: "#25D366"))
-                        .frame(width: 30)
+                    Text("💬")
+                        .font(.system(size: 24))
                     Text("WhatsApp")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.white)
@@ -440,18 +439,17 @@ private extension ResultView {
                 .padding(.vertical, 12)
             }
 
-            // Email
+            // Mail
             Button {
-                if let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                   let url = URL(string: "mailto:?subject=Verificación%20de%20Identidad&body=\(encoded)") {
-                    UIApplication.shared.open(url)
+                let subject = "Verificación de Identidad"
+                if let mailUrl = URL(string: "mailto:?subject=\(subject)&body=\(text)") {
+                    UIApplication.shared.open(mailUrl)
                     showShareOptions = false
                 }
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "envelope.fill")
-                        .foregroundColor(Color(hex: "#1877FF"))
-                        .frame(width: 30)
+                    Text("✉️")
+                        .font(.system(size: 24))
                     Text("Mail")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.white)
@@ -463,18 +461,22 @@ private extension ResultView {
 
             // Gmail
             Button {
-                if let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                   let url = URL(string: "googlegmail:///co?subject=Verificación%20de%20Identidad&body=\(encoded)") {
+                let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                if let url = URL(string: "googlegmail:///co?subject=Verificación%20de%20Identidad&body=\(encoded)") {
                     if UIApplication.shared.canOpenURL(url) {
                         UIApplication.shared.open(url)
                         showShareOptions = false
+                    } else {
+                        if let mailUrl = URL(string: "mailto:?subject=Verificación%20de%20Identidad&body=\(encoded)") {
+                            UIApplication.shared.open(mailUrl)
+                            showShareOptions = false
+                        }
                     }
                 }
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "envelope.badge.fill")
-                        .foregroundColor(Color(hex: "#EA4335"))
-                        .frame(width: 30)
+                    Text("📧")
+                        .font(.system(size: 24))
                     Text("Gmail")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.white)
@@ -486,16 +488,15 @@ private extension ResultView {
 
             // X (Twitter)
             Button {
-                if let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                   let url = URL(string: "https://x.com/intent/post?text=\(encoded)") {
+                let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                if let url = URL(string: "https://x.com/intent/post?text=\(encoded)") {
                     UIApplication.shared.open(url)
                     showShareOptions = false
                 }
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "square.fill")
-                        .foregroundColor(Color.white)
-                        .frame(width: 30)
+                    Text("𝕏")
+                        .font(.system(size: 24))
                     Text("X (Twitter)")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.white)
@@ -507,8 +508,8 @@ private extension ResultView {
 
             // Telegram
             Button {
-                if let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                   let url = URL(string: "tg://msg?text=\(encoded)") {
+                let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                if let url = URL(string: "tg://msg?text=\(encoded)") {
                     if UIApplication.shared.canOpenURL(url) {
                         UIApplication.shared.open(url)
                         showShareOptions = false
@@ -516,9 +517,8 @@ private extension ResultView {
                 }
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "paperplane.fill")
-                        .foregroundColor(Color(hex: "#0088cc"))
-                        .frame(width: 30)
+                    Text("✈️")
+                        .font(.system(size: 24))
                     Text("Telegram")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.white)
