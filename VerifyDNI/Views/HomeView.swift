@@ -19,6 +19,9 @@ struct HomeView: View {
     @State private var showNFCResult:       Bool                     = false
     @State private var nfcVerificationResult: MiDNIVerificationResult? = nil
 
+    // Tutorial
+    @State private var showOnboarding: Bool = false
+
     // MARK: - Body
 
     var body: some View {
@@ -123,6 +126,33 @@ struct HomeView: View {
                         nfcVerificationResult = nil
                     }
                 )
+            }
+        }
+        // Tutorial sheet
+        .sheet(isPresented: $showOnboarding) {
+            OnboardingView {
+                showOnboarding = false
+            }
+        }
+        // Botón "Ver tutorial" flotante al fondo
+        .overlay(alignment: .bottom) {
+            VStack {
+                Spacer()
+                Button {
+                    showOnboarding = true
+                } label: {
+                    Text("Ver tutorial")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color(hex: "#1877FF"))
+                        )
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
             }
         }
     }
