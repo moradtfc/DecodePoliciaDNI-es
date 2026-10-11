@@ -46,6 +46,75 @@ struct ResultView: View {
     }
 }
 
+// MARK: - Funciones auxiliares
+
+private extension ResultView {
+
+    /// Genera el texto a compartir/copiar con todos los datos excepto fotos
+    func generateShareableText() -> String {
+        var text = "=== VERIFICACIÓN DE IDENTIDAD ===\n\n"
+
+        // Datos del documento
+        if let number = result.documentNumber {
+            text += "Número de Documento: \(number)\n"
+        }
+        if let name = result.name {
+            text += "Nombres: \(name)\n"
+        }
+        if let surnames = result.surnames {
+            text += "Apellidos: \(surnames)\n"
+        }
+        if let dateOfBirth = result.dateOfBirth {
+            text += "Fecha de Nacimiento: \(dateOfBirth)\n"
+        }
+        if let gender = result.gender {
+            text += "Sexo: \(gender == "M" ? "Masculino" : "Femenino")\n"
+        }
+        if let expiry = result.documentExpiry {
+            text += "Fecha de Caducidad: \(expiry)\n"
+        }
+
+        // Datos de mayoría de edad
+        if let isAdult = result.isAdult {
+            text += "Mayor de Edad: \(isAdult ? "Sí" : "No")\n"
+        }
+
+        // Datos adicionales (QR completo)
+        if let address = result.address {
+            text += "Dirección: \(address)\n"
+        }
+        if let birthPlace = result.birthPlace {
+            text += "Lugar de Nacimiento: \(birthPlace)\n"
+        }
+        if let nationality = result.nationality {
+            text += "Nacionalidad: \(nationality)\n"
+        }
+        if let parents = result.parentsNames {
+            text += "Padres: \(parents)\n"
+        }
+
+        // Datos NFC
+        if let issueDate = result.issueDate {
+            text += "Fecha de Expedición: \(issueDate)\n"
+        }
+        if let supportNumber = result.supportNumber {
+            text += "Número de Soporte: \(supportNumber)\n"
+        }
+
+        // Información de verificación
+        text += "\n--- INFORMACIÓN DE VERIFICACIÓN ---\n"
+        text += "Tipo de Documento: \(result.documentTypeLabel)\n"
+        text += "Método de Escaneo: \(result.scanMethod.uppercased())\n"
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "dd-MM-yyyy HH:mm:ss"
+        let validationDate = dateFormatter.string(from: result.verificationTimestamp)
+        text += "Fecha de Validación: \(validationDate)\n"
+
+        return text
+    }
+}
+
 // MARK: - Vista válida
 
 private extension ResultView {
@@ -314,87 +383,50 @@ private extension ResultView {
 
     var sendButton: some View {
         Button {
-            guard sendState == .idle || sendState == .failed else { return }
-            Task {
-                sendState = .sending
-                await WebSocketManager.shared.sendVerification(result)
-                // Loader 2 segundos
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                sendState = .sent
-                // Breve confirmación visual antes de navegar
-                try? await Task.sleep(nanoseconds: 600_000_000)
-                onDismiss()   // navegar a home
+            let textToShare = generateShareableText()
+            let activityVC = UIActivityViewController(
+                activityItems: [textToShare],
+                applicationActivities: nil
+            )
+
+            // Excluir opciones no necesarias
+            activityVC.excludedActivityTypes = [
+                .print,
+                .saveToPCMark,
+                .addToReadingList
+            ]
+
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let rootViewController = windowScene.windows.first?.rootViewController {
+                rootViewController.present(activityVC, animated: true)
             }
         } label: {
             let btnH: CGFloat = ScreenSize.isSmall ? 48 : 54
-            ZStack {
-                switch sendState {
-                case .idle:
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.up.forward.app")
-                        Text("Enviar datos al panel")
-                            .font(.system(size: 16, weight: .semibold))
-                            .minimumScaleFactor(0.85)
-                            .lineLimit(1)
-                            .allowsTightening(true)
-                    }
-                    .foregroundColor(Color(hex: "#052e16"))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: btnH)
-                    .background(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-
-                case .sending:
-                    HStack(spacing: 10) {
-                        ProgressView()
-                            .tint(Color(hex: "#052e16"))
-                        Text("Enviando...")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(Color(hex: "#052e16"))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: btnH)
-                    .background(Color.white.opacity(0.7))
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-
-                case .sent:
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark")
-                        Text("Datos enviados ✓")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: btnH)
-                    .background(Color(hex: "#4ade80"))
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-
-                case .failed:
-                    HStack(spacing: 8) {
-                        Image(systemName: "xmark")
-                        Text("Error al enviar — reintentar")
-                            .font(.system(size: 16, weight: .semibold))
-                            .minimumScaleFactor(0.85)
-                            .lineLimit(1)
-                            .allowsTightening(true)
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: btnH)
-                    .background(Color(hex: "#ef4444").opacity(0.3))
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                }
+            HStack(spacing: 8) {
+                Image(systemName: "square.and.arrow.up")
+                Text("Compartir datos")
+                    .font(.system(size: 16, weight: .semibold))
+                    .minimumScaleFactor(0.85)
+                    .lineLimit(1)
+                    .allowsTightening(true)
             }
+            .foregroundColor(Color(hex: "#052e16"))
+            .frame(maxWidth: .infinity)
+            .frame(height: btnH)
+            .background(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
         }
-        .disabled(sendState == .sending || sendState == .sent)
     }
 
     // MARK: Acciones secundarias
 
     var secondaryActions: some View {
         HStack(spacing: 12) {
-            Button { onScanAgain() } label: {
-                Label("Nuevo escaneo", systemImage: "qrcode.viewfinder")
+            Button {
+                let textToShare = generateShareableText()
+                UIPasteboard.general.string = textToShare
+            } label: {
+                Label("Copiar datos", systemImage: "doc.on.doc")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
