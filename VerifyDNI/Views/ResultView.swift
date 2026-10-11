@@ -27,9 +27,11 @@ struct ResultView: View {
     // MARK: - Estado local
 
     @State private var cardVisible = false
-    @State private var sendState: SendState = .idle
+    @State private var showShareOptions = false
 
-    enum SendState { case idle, sending, sent, failed }
+    enum ShareOption {
+        case mail, whatsapp, gmail, x, telegram, copy
+    }
 
     // MARK: - Body
 
@@ -383,23 +385,7 @@ private extension ResultView {
 
     var sendButton: some View {
         Button {
-            let textToShare = generateShareableText()
-            let activityVC = UIActivityViewController(
-                activityItems: [textToShare],
-                applicationActivities: nil
-            )
-
-            // Excluir opciones no necesarias
-            activityVC.excludedActivityTypes = [
-                .print,
-                .markupAsPDF,
-                .addToReadingList
-            ]
-
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let rootViewController = windowScene.windows.first?.rootViewController {
-                rootViewController.present(activityVC, animated: true)
-            }
+            showShareOptions = true
         } label: {
             let btnH: CGFloat = ScreenSize.isSmall ? 48 : 54
             HStack(spacing: 8) {
@@ -416,6 +402,151 @@ private extension ResultView {
             .background(.white)
             .clipShape(RoundedRectangle(cornerRadius: 14))
         }
+        .sheet(isPresented: $showShareOptions) {
+            shareOptionsSheet
+        }
+    }
+
+    private var shareOptionsSheet: some View {
+        let text = generateShareableText()
+
+        return VStack(spacing: 12) {
+            Text("Compartir datos")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.white)
+                .padding(.top, 20)
+
+            Divider()
+                .background(Color.white.opacity(0.2))
+
+            // WhatsApp
+            Button {
+                if let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                   let url = URL(string: "https://wa.me/?text=\(encoded)") {
+                    UIApplication.shared.open(url)
+                    showShareOptions = false
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "bubble.right.fill")
+                        .foregroundColor(Color(hex: "#25D366"))
+                        .frame(width: 30)
+                    Text("WhatsApp")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.white)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+
+            // Email
+            Button {
+                if let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                   let url = URL(string: "mailto:?subject=Verificación%20de%20Identidad&body=\(encoded)") {
+                    UIApplication.shared.open(url)
+                    showShareOptions = false
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "envelope.fill")
+                        .foregroundColor(Color(hex: "#1877FF"))
+                        .frame(width: 30)
+                    Text("Mail")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.white)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+
+            // Gmail
+            Button {
+                if let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                   let url = URL(string: "googlegmail:///co?subject=Verificación%20de%20Identidad&body=\(encoded)") {
+                    if UIApplication.shared.canOpenURL(url) {
+                        UIApplication.shared.open(url)
+                        showShareOptions = false
+                    }
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "envelope.badge.fill")
+                        .foregroundColor(Color(hex: "#EA4335"))
+                        .frame(width: 30)
+                    Text("Gmail")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.white)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+
+            // X (Twitter)
+            Button {
+                if let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                   let url = URL(string: "https://x.com/intent/post?text=\(encoded)") {
+                    UIApplication.shared.open(url)
+                    showShareOptions = false
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "square.fill")
+                        .foregroundColor(Color.white)
+                        .frame(width: 30)
+                    Text("X (Twitter)")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.white)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+
+            // Telegram
+            Button {
+                if let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                   let url = URL(string: "tg://msg?text=\(encoded)") {
+                    if UIApplication.shared.canOpenURL(url) {
+                        UIApplication.shared.open(url)
+                        showShareOptions = false
+                    }
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "paperplane.fill")
+                        .foregroundColor(Color(hex: "#0088cc"))
+                        .frame(width: 30)
+                    Text("Telegram")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.white)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+
+            Divider()
+                .background(Color.white.opacity(0.2))
+
+            // Cerrar
+            Button {
+                showShareOptions = false
+            } label: {
+                Text("Cerrar")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(Color(hex: "#1877FF"))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .padding(.bottom, 20)
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color(hex: "#040D1A"))
+        .presentationDetents([.medium])
+        .preferredColorScheme(.dark)
     }
 
     // MARK: Acciones secundarias
