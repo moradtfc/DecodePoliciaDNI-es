@@ -392,7 +392,7 @@ private extension ResultView {
             // Excluir opciones no necesarias
             activityVC.excludedActivityTypes = [
                 .print,
-                .saveToPCMark,
+                .markupAsPDF,
                 .addToReadingList
             ]
 
