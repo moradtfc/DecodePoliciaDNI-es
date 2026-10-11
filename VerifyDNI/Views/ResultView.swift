@@ -462,17 +462,22 @@ private extension ResultView {
             // Gmail
             Button {
                 let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                var opened = false
+
+                // Intentar primero Gmail app
                 if let url = URL(string: "googlegmail:///co?subject=Verificación%20de%20Identidad&body=\(encoded)") {
                     if UIApplication.shared.canOpenURL(url) {
                         UIApplication.shared.open(url)
-                        showShareOptions = false
-                    } else {
-                        if let mailUrl = URL(string: "mailto:?subject=Verificación%20de%20Identidad&body=\(encoded)") {
-                            UIApplication.shared.open(mailUrl)
-                            showShareOptions = false
-                        }
+                        opened = true
                     }
                 }
+
+                // Fallback a Mail
+                if !opened, let url = URL(string: "mailto:?subject=Verificación%20de%20Identidad&body=\(encoded)") {
+                    UIApplication.shared.open(url)
+                }
+
+                showShareOptions = false
             } label: {
                 HStack(spacing: 12) {
                     Text("📧")
@@ -510,10 +515,8 @@ private extension ResultView {
             Button {
                 let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
                 if let url = URL(string: "tg://msg?text=\(encoded)") {
-                    if UIApplication.shared.canOpenURL(url) {
-                        UIApplication.shared.open(url)
-                        showShareOptions = false
-                    }
+                    UIApplication.shared.open(url)
+                    showShareOptions = false
                 }
             } label: {
                 HStack(spacing: 12) {

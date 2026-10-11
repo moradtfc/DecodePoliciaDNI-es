@@ -73,10 +73,10 @@ struct MRZScannerView: UIViewRepresentable {
 
         private let textRequest: VNRecognizeTextRequest = {
             let r = VNRecognizeTextRequest()
-            r.recognitionLevel       = .accurate
+            r.recognitionLevel       = .fast
             r.usesLanguageCorrection = false
             r.recognitionLanguages   = ["en-US"]
-            r.minimumTextHeight      = 0.01
+            r.minimumTextHeight      = 0.015
             return r
         }()
 
