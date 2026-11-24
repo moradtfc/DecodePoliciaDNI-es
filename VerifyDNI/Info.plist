@@ -35,7 +35,23 @@
 	</dict>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>armv7</string>
+		<string>arm64</string>
+	</array>
+	<!-- La app solo usa cifrado estándar del sistema (Security/CryptoKit/TLS) para
+	     verificar firmas y conectar por HTTPS → exenta de documentación de exportación. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>es</string>
+	</array>
+	<!-- Esquemas consultados con canOpenURL (compartir resultado). Sin esta lista,
+	     canOpenURL devuelve siempre false en iOS. -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>googlegmail</string>
+		<string>whatsapp</string>
+		<string>tg</string>
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
@@ -51,14 +67,9 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>VerifyDNI necesita acceso a la cámara para escanear códigos QR y la zona MRZ del DNI físico.</string>
+	<string>VerifyDNI usa la cámara para escanear el código QR del DNI digital (MiDNI) y la zona MRZ del DNI físico. Las imágenes se procesan en el dispositivo y no se guardan.</string>
 	<key>NFCReaderUsageDescription</key>
-	<string>VerifyDNI necesita acceso NFC para leer los datos del chip del DNI físico español.</string>
-	<key>com.apple.developer.nfc.readersession.formats</key>
-	<array>
-		<string>NDEF</string>
-		<string>TAG</string>
-	</array>
+	<string>VerifyDNI usa NFC para leer el chip del DNI físico y verificar su autenticidad. Los datos se procesan en el dispositivo.</string>
 	<!-- ISO 7816 Application Identifiers — REQUIRED for NFCTagReaderSession to detect eMRTD chips (Spanish DNI, passports).
 	     Without this list iOS 13+ will NOT connect to ISO 7816-4 tags.
 	     A0000002471001 = ICAO 9303 eMRTD application (DNI, passports worldwide). -->

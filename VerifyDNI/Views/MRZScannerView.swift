@@ -123,7 +123,7 @@ struct MRZScannerView: UIViewRepresentable {
                     didFindMRZ = true
                     let final = candidateResult ?? result
                     print("✅ [MRZ] Consenso alcanzado (\(candidateCount) frames): \(key)")
-                    DispatchQueue.main.async { self.onResult(final) }
+                    DispatchQueue.main.async { [weak self] in self?.onResult(final) }
                 }
             } catch {
                 print("🔴 [MRZ] Vision error: \(error)")
@@ -138,7 +138,7 @@ struct MRZScannerView: UIViewRepresentable {
             for (i, c) in input.enumerated() {
                 let v: Int
                 if let d = c.wholeNumberValue { v = d }
-                else if c >= "A" && c <= "Z"  { v = Int(c.asciiValue! - 55) }
+                else if let a = c.asciiValue, a >= 65, a <= 90 { v = Int(a) - 55 }
                 else                           { v = 0 }   // '<' o desconocido
                 sum += v * weights[i % 3]
             }
@@ -441,12 +441,34 @@ final class CameraPreviewView: UIView {
 
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
 
-    var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+    var previewLayer: AVCaptureVideoPreviewLayer {
+        // layerClass garantiza el tipo; el fallback evita un crash si cambiara.
+        (layer as? AVCaptureVideoPreviewLayer) ?? AVCaptureVideoPreviewLayer()
+    }
 
     func setup(delegate: AVCaptureVideoDataOutputSampleBufferDelegate) {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            configureSession(delegate: delegate)
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self, weak delegate] granted in
+                guard granted else { return }
+                DispatchQueue.main.async {
+                    guard let self, let delegate else { return }
+                    self.configureSession(delegate: delegate)
+                }
+            }
+        default:
+            debugLog("🔴 [MRZ] Permiso de cámara denegado")
+        }
+    }
+
+    private func configureSession(delegate: AVCaptureVideoDataOutputSampleBufferDelegate) {
         let session = AVCaptureSession()
         // 1920×1080 mejora la nitidez del OCR respecto a 720p
-        session.sessionPreset = .hd1920x1080
+        if session.canSetSessionPreset(.hd1920x1080) {
+            session.sessionPreset = .hd1920x1080
+        }
 
         guard
             let camera = AVCaptureDevice.default(.builtInWideAngleCamera,
@@ -459,8 +481,8 @@ final class CameraPreviewView: UIView {
         }
 
         // Autoenfoque continuo para mantener nitidez sobre el DNI
-        if camera.isFocusModeSupported(.continuousAutoFocus) {
-            try? camera.lockForConfiguration()
+        if camera.isFocusModeSupported(.continuousAutoFocus),
+           (try? camera.lockForConfiguration()) != nil {
             camera.focusMode = .continuousAutoFocus
             camera.unlockForConfiguration()
         }

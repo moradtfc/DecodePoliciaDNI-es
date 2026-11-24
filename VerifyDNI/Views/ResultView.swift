@@ -421,7 +421,7 @@ private extension ResultView {
 
             // WhatsApp
             Button {
-                let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryValueAllowed) ?? ""
                 if let url = URL(string: "https://wa.me/?text=\(encoded)") {
                     UIApplication.shared.open(url)
                     showShareOptions = false
@@ -441,8 +441,9 @@ private extension ResultView {
 
             // Mail
             Button {
-                let subject = "Verificación de Identidad"
-                if let mailUrl = URL(string: "mailto:?subject=\(subject)&body=\(text)") {
+                let subject = "Verificación%20de%20Identidad"
+                let encodedBody = text.addingPercentEncoding(withAllowedCharacters: .urlQueryValueAllowed) ?? ""
+                if let mailUrl = URL(string: "mailto:?subject=\(subject)&body=\(encodedBody)") {
                     UIApplication.shared.open(mailUrl)
                     showShareOptions = false
                 }
@@ -461,7 +462,7 @@ private extension ResultView {
 
             // Gmail
             Button {
-                let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryValueAllowed) ?? ""
                 var opened = false
 
                 // Intentar primero Gmail app
@@ -493,7 +494,7 @@ private extension ResultView {
 
             // X (Twitter)
             Button {
-                let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryValueAllowed) ?? ""
                 if let url = URL(string: "https://x.com/intent/post?text=\(encoded)") {
                     UIApplication.shared.open(url)
                     showShareOptions = false
@@ -513,7 +514,7 @@ private extension ResultView {
 
             // Telegram
             Button {
-                let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryValueAllowed) ?? ""
                 if let url = URL(string: "tg://msg?text=\(encoded)") {
                     UIApplication.shared.open(url)
                     showShareOptions = false
@@ -1071,4 +1072,15 @@ private extension ResultView {
         }
         return items
     }
+}
+
+
+private extension CharacterSet {
+    /// Como `.urlQueryAllowed` pero escapando también `& = + ? / #`, para que el
+    /// texto compartido (que contiene saltos de línea, `&`, etc.) no rompa la URL.
+    static let urlQueryValueAllowed: CharacterSet = {
+        var set = CharacterSet.urlQueryAllowed
+        set.remove(charactersIn: "&=+?/#;:,@$")
+        return set
+    }()
 }

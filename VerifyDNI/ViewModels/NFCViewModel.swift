@@ -142,8 +142,8 @@ final class NFCViewModel: ObservableObject {
 
         // NSLog con interpolación directa (las variantes con formato %@ no están disponibles en Swift)
         let docType = (scanResult.nationality.flatMap { $0 == "ESP" ? "DNI" : "TIE(\($0))" }) ?? "?"
-        NSLog("[VerifyDNI] ✅ MRZ procesado — doc: \(docNumber), dob: \(birthDate), exp: \(expiryDate), tipo: \(docType)")
-        NSLog("[VerifyDNI] ✅ MRZ key calculada (\(mrzKey.count) chars): \(mrzKey)")
+        debugLog("[VerifyDNI] ✅ MRZ procesado — doc: \(docNumber), dob: \(birthDate), exp: \(expiryDate), tipo: \(docType)")
+        debugLog("[VerifyDNI] ✅ MRZ key calculada (\(mrzKey.count) chars): \(mrzKey)")
     }
 
     // MARK: - Lectura NFC
@@ -152,10 +152,10 @@ final class NFCViewModel: ObservableObject {
         onSuccess: @escaping (MiDNIVerificationResult) -> Void,
         onError:   @escaping (NFCReadError) -> Void
     ) async {
-        NSLog("[VerifyDNI] 🔵 startNFCReading — mrzKey.count=\(mrzKey.count)")
+        debugLog("[VerifyDNI] 🔵 startNFCReading — mrzKey.count=\(mrzKey.count)")
 
         guard NFCTagReaderSession.readingAvailable else {
-            NSLog("[VerifyDNI] 🔴 NFCTagReaderSession.readingAvailable = FALSE")
+            debugLog("[VerifyDNI] 🔴 NFCTagReaderSession.readingAvailable = FALSE")
             let err = NFCReadError.unsupportedDevice
             nfcError = err
             onError(err)
@@ -163,7 +163,7 @@ final class NFCViewModel: ObservableObject {
         }
 
         guard !mrzKey.isEmpty else {
-            NSLog("[VerifyDNI] 🔴 mrzKey vacía — escanea el MRZ primero")
+            debugLog("[VerifyDNI] 🔴 mrzKey vacía — escanea el MRZ primero")
             return
         }
 
@@ -177,7 +177,7 @@ final class NFCViewModel: ObservableObject {
         let customMessages: (NFCViewDisplayMessage) -> String? = { [weak self] msg in
             switch msg {
             case .requestPresentPassport:
-                NSLog("[VerifyDNI] 🟡 NFC → requestPresentPassport")
+                debugLog("[VerifyDNI] 🟡 NFC → requestPresentPassport")
                 DispatchQueue.main.async {
                     self?.nfcSessionStarted = true   // la sesión arrancó: la vista puede cambiar de fase
                     self?.nfcPhaseLabel     = "Buscando chip..."
@@ -185,21 +185,21 @@ final class NFCViewModel: ObservableObject {
                 }
                 return "Desliza el DNI por la parte trasera del iPhone"
             case .authenticatingWithPassport:
-                NSLog("[VerifyDNI] 🟡 NFC → authenticatingWithPassport ✓ CHIP DETECTADO")
+                debugLog("[VerifyDNI] 🟡 NFC → authenticatingWithPassport ✓ CHIP DETECTADO")
                 DispatchQueue.main.async {
                     self?.nfcPhaseLabel = "Chip detectado — autenticando..."
                     self?.nfcProgress   = 0.05
                 }
                 return "Chip detectado — autenticando..."
             case .readingDataGroupProgress(_, let progress):
-                NSLog("[VerifyDNI] 🟡 NFC → readingDataGroup \(progress)%%")
+                debugLog("[VerifyDNI] 🟡 NFC → readingDataGroup \(progress)%")
                 DispatchQueue.main.async {
                     self?.nfcPhaseLabel = "Leyendo datos del chip..."
                     self?.nfcProgress = 0.10 + (Double(progress) / 100.0) * 0.85
                 }
                 return "Leyendo datos del chip..."
             case .successfulRead:
-                NSLog("[VerifyDNI] 🟢 NFC → successfulRead")
+                debugLog("[VerifyDNI] 🟢 NFC → successfulRead")
                 DispatchQueue.main.async {
                     self?.nfcPhaseLabel = "Lectura completada"
                     self?.nfcProgress   = 1.0
@@ -218,7 +218,7 @@ final class NFCViewModel: ObservableObject {
         //  DG13 → Datos extendidos españoles (apellidos, padres, lugar nac., dirección)
         //  SOD  → Security Object Document (para fecha de expedición)
         let tagsToRead: [DataGroupId] = [.COM, .DG1, .DG2, .DG7, .DG11, .DG13, .SOD]
-        NSLog("[VerifyDNI] 🔵 readPassport — grupos: \(tagsToRead.map { $0.getName() })")
+        debugLog("[VerifyDNI] 🔵 readPassport — grupos: \(tagsToRead.map { $0.getName() })")
 
         do {
             let passport = try await passportReader.readPassport(
@@ -230,7 +230,7 @@ final class NFCViewModel: ObservableObject {
             let elapsed = Date().timeIntervalSince(nfcStartTime ?? Date())
             isReading         = false
             nfcSessionStarted = false
-            NSLog("[VerifyDNI] 🟢 Lectura NFC OK en \(String(format: "%.1f", elapsed))s — doc: \(passport.documentNumber)")
+            debugLog("[VerifyDNI] 🟢 Lectura NFC OK en \(String(format: "%.1f", elapsed))s — doc: \(passport.documentNumber)")
 
             logPassportDiagnostics(passport)
 
@@ -245,9 +245,9 @@ final class NFCViewModel: ObservableObject {
             isReading         = false
             nfcSessionStarted = false
 
-            NSLog("[VerifyDNI] 🔴 Error NFC tras \(String(format: "%.1f", elapsed))s")
-            NSLog("[VerifyDNI] 🔴 Error type: \(type(of: error))")
-            NSLog("[VerifyDNI] 🔴 Error desc: \(error.localizedDescription)")
+            debugLog("[VerifyDNI] 🔴 Error NFC tras \(String(format: "%.1f", elapsed))s")
+            debugLog("[VerifyDNI] 🔴 Error type: \(type(of: error))")
+            debugLog("[VerifyDNI] 🔴 Error desc: \(error.localizedDescription)")
 
             let mapped = mapError(error, elapsed: elapsed)
             nfcError = mapped
@@ -388,7 +388,7 @@ final class NFCViewModel: ObservableObject {
         // La fecha de expedición también es siglo 21 (ningún DNI fue expedido en 1900s)
         let issueDateFormatted = formatExpiryMRZDate(passport.computedIssueDate)
 
-        NSLog("[VerifyDNI] 🔵 Conversión NFC — docType:\(docTypeCode ?? "?") dni:\(dniNumber ?? "?") soporte:\(soporteNumber ?? "?") nombres:'\(givenNames ?? "?")' apellidos:'\(surnames ?? "?")' padres:'\(parents ?? "?")' nacimiento:'\(birthCity ?? "?")' dir:'\(residenceDisplay ?? "?")' expedición:'\(issueDateFormatted ?? "?")'")
+        debugLog("[VerifyDNI] 🔵 Conversión NFC — docType:\(docTypeCode ?? "?") dni:\(dniNumber ?? "?") soporte:\(soporteNumber ?? "?") nombres:'\(givenNames ?? "?")' apellidos:'\(surnames ?? "?")' padres:'\(parents ?? "?")' nacimiento:'\(birthCity ?? "?")' dir:'\(residenceDisplay ?? "?")' expedición:'\(issueDateFormatted ?? "?")'")
 
 
         return MiDNIVerificationResult(
@@ -428,61 +428,61 @@ final class NFCViewModel: ObservableObject {
     /// Esto nos permite investigar qué datos están realmente en el chip (fecha de
     /// expedición, lugar de nacimiento, número de documento, DG13, etc.).
     private func logPassportDiagnostics(_ p: NFCPassportModel) {
-        NSLog("────────────────────────────────────────────────────────")
-        NSLog("[CHIP DIAG] 📋 DIAGNÓSTICO COMPLETO DEL CHIP NFC")
-        NSLog("────────────────────────────────────────────────────────")
+        debugLog("────────────────────────────────────────────────────────")
+        debugLog("[CHIP DIAG] 📋 DIAGNÓSTICO COMPLETO DEL CHIP NFC")
+        debugLog("────────────────────────────────────────────────────────")
 
         // ── Campos MRZ (DG1) ─────────────────────────────────────────────────
-        NSLog("[CHIP DIAG] documentType       = '\(p.documentType)'")
-        NSLog("[CHIP DIAG] documentNumber     = '\(p.documentNumber)'")
-        NSLog("[CHIP DIAG] personalNumber     = '\(p.personalNumber ?? "nil")'")
-        NSLog("[CHIP DIAG] dateOfBirth        = '\(p.dateOfBirth)'")
-        NSLog("[CHIP DIAG] documentExpiryDate = '\(p.documentExpiryDate)'")
-        NSLog("[CHIP DIAG] nationality        = '\(p.nationality)'")
-        NSLog("[CHIP DIAG] gender             = '\(p.gender)'")
-        NSLog("[CHIP DIAG] lastName           = '\(p.lastName)'")
-        NSLog("[CHIP DIAG] firstName          = '\(p.firstName)'")
-        NSLog("[CHIP DIAG] issuingAuthority   = '\(p.issuingAuthority ?? "nil")'")
-        NSLog("[CHIP DIAG] passportMRZ        = '\(p.passportMRZ ?? "nil")'")
+        debugLog("[CHIP DIAG] documentType       = '\(p.documentType)'")
+        debugLog("[CHIP DIAG] documentNumber     = '\(p.documentNumber)'")
+        debugLog("[CHIP DIAG] personalNumber     = '\(p.personalNumber ?? "nil")'")
+        debugLog("[CHIP DIAG] dateOfBirth        = '\(p.dateOfBirth)'")
+        debugLog("[CHIP DIAG] documentExpiryDate = '\(p.documentExpiryDate)'")
+        debugLog("[CHIP DIAG] nationality        = '\(p.nationality)'")
+        debugLog("[CHIP DIAG] gender             = '\(p.gender)'")
+        debugLog("[CHIP DIAG] lastName           = '\(p.lastName)'")
+        debugLog("[CHIP DIAG] firstName          = '\(p.firstName)'")
+        debugLog("[CHIP DIAG] issuingAuthority   = '\(p.issuingAuthority ?? "nil")'")
+        debugLog("[CHIP DIAG] passportMRZ        = '\(p.passportMRZ ?? "nil")'")
 
         // ── Campos DG11 (datos personales adicionales) ───────────────────────
-        NSLog("[CHIP DIAG] placeOfBirth       = '\(p.placeOfBirth ?? "nil")'")
-        NSLog("[CHIP DIAG] residenceAddress   = '\(p.residenceAddress ?? "nil")'")
+        debugLog("[CHIP DIAG] placeOfBirth       = '\(p.placeOfBirth ?? "nil")'")
+        debugLog("[CHIP DIAG] residenceAddress   = '\(p.residenceAddress ?? "nil")'")
 
         // ── Grupos de datos presentes ─────────────────────────────────────────
         let dgs = p.dataGroupsPresent.joined(separator: ", ")
-        NSLog("[CHIP DIAG] dataGroupsPresent  = [\(dgs)]")
+        debugLog("[CHIP DIAG] dataGroupsPresent  = [\(dgs)]")
 
         // ── Fecha de expedición ─────────────────────────────────────────────────
         // computedIssueDate = SOD date (preferida) o fecha calculada por reglas
-        NSLog("[CHIP DIAG] computedIssueDate  = '\(p.computedIssueDate ?? "nil")' (formatted: '\(formatMRZDate(p.computedIssueDate) ?? "nil")')")
-        NSLog("[CHIP DIAG] SOD present?        = \(p.dataGroupsRead[.SOD] != nil ? "SÍ" : "NO")")
+        debugLog("[CHIP DIAG] computedIssueDate  = '\(p.computedIssueDate ?? "nil")' (formatted: '\(formatMRZDate(p.computedIssueDate) ?? "nil")')")
+        debugLog("[CHIP DIAG] SOD present?        = \(p.dataGroupsRead[.SOD] != nil ? "SÍ" : "NO")")
 
         // ── DG13 completo (datos específicos DNI español) ─────────────────────
         if let dg13 = p.dataGroupsRead[.DG13] {
             let raw = dg13.data
-            NSLog("[CHIP DIAG] DG13 raw bytes (\(raw.count)): \(raw.prefix(64).map { String(format: "%02X", $0) }.joined(separator: " "))…")
+            debugLog("[CHIP DIAG] DG13 raw bytes (\(raw.count)): \(raw.prefix(64).map { String(format: "%02X", $0) }.joined(separator: " "))…")
 
             // Parsear todos los campos pipe-separated para investigación
             let allFields = dg13AllFields(dg13.data)
             for (i, field) in allFields.enumerated() {
                 if !field.isEmpty {
-                    NSLog("[CHIP DIAG] DG13[\(i)] = '\(field)'")
+                    debugLog("[CHIP DIAG] DG13[\(i)] = '\(field)'")
                 }
             }
         } else {
-            NSLog("[CHIP DIAG] DG13 = NO DISPONIBLE (no leído o no presente)")
+            debugLog("[CHIP DIAG] DG13 = NO DISPONIBLE (no leído o no presente)")
         }
 
         // ── DG11 raw (si está disponible) ─────────────────────────────────────
         if let dg11 = p.dataGroupsRead[.DG11] {
             let raw = dg11.data
-            NSLog("[CHIP DIAG] DG11 raw bytes (\(raw.count)): \(raw.prefix(64).map { String(format: "%02X", $0) }.joined(separator: " "))…")
+            debugLog("[CHIP DIAG] DG11 raw bytes (\(raw.count)): \(raw.prefix(64).map { String(format: "%02X", $0) }.joined(separator: " "))…")
         } else {
-            NSLog("[CHIP DIAG] DG11 = NO DISPONIBLE")
+            debugLog("[CHIP DIAG] DG11 = NO DISPONIBLE")
         }
 
-        NSLog("────────────────────────────────────────────────────────")
+        debugLog("────────────────────────────────────────────────────────")
     }
 
     /// Extrae TODOS los campos pipe-separated de DG13 (para diagnóstico completo).
@@ -590,7 +590,7 @@ final class NFCViewModel: ObservableObject {
     private func mapError(_ error: Error, elapsed: TimeInterval = 60) -> NFCReadError {
         let desc = error.localizedDescription.lowercased()
 
-        NSLog("[VerifyDNI] 🔴 mapError — elapsed=\(String(format: "%.1f", elapsed))s | desc='\(desc)'")
+        debugLog("[VerifyDNI] 🔴 mapError — elapsed=\(String(format: "%.1f", elapsed))s | desc='\(desc)'")
 
         // ─── Cancelación explícita — puede ocurrir en cualquier momento ─────────
         if desc.contains("usercanceled") || desc.contains("user cancel")
@@ -620,7 +620,7 @@ final class NFCViewModel: ObservableObject {
         // NOTA: "UnexpectedError" con elapsed alto es un timeout real (chip no hallado).
         if desc.contains("unexpectederror") || desc.contains("unexpected") {
             if elapsed < 5 {
-                NSLog("[VerifyDNI] ⚠️  UnexpectedError inmediato (\(String(format: "%.1f", elapsed))s) → System resource unavailable")
+                debugLog("[VerifyDNI] ⚠️  UnexpectedError inmediato (\(String(format: "%.1f", elapsed))s) → System resource unavailable")
                 return .tagLost  // mismo remedio: esperar y reintentar
             }
             return .timeout
@@ -630,7 +630,7 @@ final class NFCViewModel: ObservableObject {
         // Solo llegamos aquí si elapsed < 5s y la descripción no encaja en ninguno
         // de los casos anteriores. Indica un error de configuración del proyecto.
         if elapsed < 5 {
-            NSLog("[VerifyDNI] ⚠️  Error inmediato (\(String(format: "%.1f", elapsed))s) — posible problema de entitlement")
+            debugLog("[VerifyDNI] ⚠️  Error inmediato (\(String(format: "%.1f", elapsed))s) — posible problema de entitlement")
             return .permissionError
         }
 

@@ -33,12 +33,12 @@ extension NFCPassportModel {
     var computedIssueDate: String? {
         // Prioridad 1: fecha real del SOD
         if let fromSOD = issueDateFromSOD {
-            NSLog("[CHIP] 📅 Issue date from SOD: \(fromSOD)")
+            debugLog("[CHIP] 📅 Issue date from SOD: \(fromSOD)")
             return fromSOD
         }
         // Prioridad 2: cálculo por reglas de vigencia
         let fromRules = issueDateByRules
-        NSLog("[CHIP] 📅 Issue date by rules: \(fromRules ?? "nil") (SOD not available)")
+        debugLog("[CHIP] 📅 Issue date by rules: \(fromRules ?? "nil") (SOD not available)")
         return fromRules
     }
 
@@ -71,7 +71,7 @@ extension NFCPassportModel {
                       let utcRange = Range(match.range(at: 1), in: valueString) else { continue }
                 allUTCTimes.append(String(valueString[utcRange]))
             }
-            NSLog("[CHIP] 📅 SOD UTCTimes found (\(allUTCTimes.count)): \(allUTCTimes)")
+            debugLog("[CHIP] 📅 SOD UTCTimes found (\(allUTCTimes.count)): \(allUTCTimes)")
 
             // El ÚLTIMO UTCTIME siempre es la fecha de expedición (igual que Santander)
             if let lastUTCTime = allUTCTimes.last, let parsed = parseSODUTCTime(lastUTCTime) {

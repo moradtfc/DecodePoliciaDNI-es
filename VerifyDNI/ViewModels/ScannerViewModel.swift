@@ -84,7 +84,7 @@ final class ScannerViewModel: ObservableObject {
         torchOn.toggle()
         guard let device = AVCaptureDevice.default(for: .video),
               device.hasTorch else { return }
-        try? device.lockForConfiguration()
+        guard (try? device.lockForConfiguration()) != nil else { return }
         device.torchMode = torchOn ? .on : .off
         device.unlockForConfiguration()
     }

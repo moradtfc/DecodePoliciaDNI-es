@@ -8,6 +8,7 @@ import SwiftUI
 struct ProfileView: View {
 
     @State private var showOnboarding: Bool = false
+    @ObservedObject private var certManager = CertificateManager.shared
 
     // MARK: - Body
 
@@ -99,8 +100,8 @@ struct ProfileView: View {
             appInfoRow(
                 icon: "doc.text",
                 label: "Certificado MiDNI",
-                value: "Policía Nacional · Activo",
-                valueColor: Color(hex: "#4ade80")
+                value: certificateStatusText,
+                valueColor: certificateStatusColor
             )
         }
         .glassCard(cornerRadius: 16)
@@ -183,6 +184,24 @@ struct ProfileView: View {
 
     // MARK: - Helpers
 
+    private var certificateStatusText: String {
+        switch certManager.status {
+        case .loaded:      return "Policía Nacional · Activo"
+        case .downloading: return "Descargando…"
+        case .notLoaded:   return "Sin cargar"
+        case .failed:      return "No disponible (sin conexión)"
+        }
+    }
+
+    private var certificateStatusColor: Color {
+        switch certManager.status {
+        case .loaded:      return Color(hex: "#4ade80")
+        case .downloading: return Color(hex: "#facc15")
+        case .notLoaded:   return Color(white: 0.75)
+        case .failed:      return Color(hex: "#ef4444")
+        }
+    }
+
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"]
             as? String ?? "1.0"
@@ -196,6 +215,12 @@ struct ProfileView: View {
             Text("v\(appVersion) · VerifyDNI")
                 .font(.system(size: 12, weight: .regular))
                 .foregroundColor(Color(white: 0.3))
+            Text("VerifyDNI es una aplicación independiente. No está afiliada ni respaldada por la Policía Nacional ni por el Ministerio del Interior. Los datos del documento se procesan solo en tu dispositivo.")
+                .font(.system(size: 11))
+                .foregroundColor(Color(white: 0.35))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+                .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.vertical, 20)
